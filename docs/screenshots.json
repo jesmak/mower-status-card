@@ -1,0 +1,392 @@
+{
+    "clock": "2026-07-15T13:20:00+03:00",
+    "config": {
+        "lawn_mower": {}
+    },
+    "states": {
+        "lawn_mower.rosie": {
+            "state": "mowing",
+            "attributes": {
+                "friendly_name": "Rosie",
+                "supported_features": 15
+            }
+        },
+        "sensor.rosie_battery": {
+            "state": "71",
+            "attributes": {
+                "friendly_name": "Rosie Battery",
+                "device_class": "battery",
+                "unit_of_measurement": "%",
+                "state_class": "measurement"
+            }
+        },
+        "binary_sensor.rosie_charging": {
+            "state": "off",
+            "attributes": {
+                "friendly_name": "Rosie Charging",
+                "device_class": "battery_charging"
+            }
+        },
+        "sensor.rosie_progress": {
+            "state": "46",
+            "attributes": {
+                "friendly_name": "Rosie Progress",
+                "unit_of_measurement": "%"
+            }
+        },
+        "sensor.rosie_time_left": {
+            "state": "38",
+            "attributes": {
+                "friendly_name": "Rosie Time left",
+                "device_class": "duration",
+                "unit_of_measurement": "min"
+            }
+        },
+        "sensor.rosie_elapsed_time": {
+            "state": "32",
+            "attributes": {
+                "friendly_name": "Rosie Elapsed time",
+                "device_class": "duration",
+                "unit_of_measurement": "min"
+            }
+        },
+        "sensor.rosie_last_error": {
+            "state": "unknown",
+            "attributes": {
+                "friendly_name": "Rosie Last error"
+            }
+        },
+        "sensor.rosie_last_error_time": {
+            "state": "unknown",
+            "attributes": {
+                "friendly_name": "Rosie Last error time",
+                "device_class": "timestamp"
+            }
+        },
+        "binary_sensor.rosie_rain_detected": {
+            "state": "off",
+            "attributes": {
+                "friendly_name": "Rosie Rain detected",
+                "device_class": "moisture"
+            }
+        },
+        "sensor.rosie_rtk_position": {
+            "state": "Fix",
+            "attributes": {
+                "friendly_name": "Rosie RTK position"
+            }
+        },
+        "sensor.rosie_visual_positioning": {
+            "state": "SIGNAL_GOOD",
+            "attributes": {
+                "friendly_name": "Rosie Visual positioning status"
+            }
+        },
+        "sensor.rosie_satellites": {
+            "state": "30",
+            "attributes": {
+                "friendly_name": "Rosie Satellites"
+            }
+        },
+        "sensor.rosie_blade_used_time": {
+            "state": "87.5",
+            "attributes": {
+                "friendly_name": "Rosie Blade used time",
+                "device_class": "duration",
+                "unit_of_measurement": "h"
+            }
+        },
+        "sensor.rosie_blade_warning_time": {
+            "state": "100",
+            "attributes": {
+                "friendly_name": "Rosie Blade wear warning time",
+                "device_class": "duration",
+                "unit_of_measurement": "h"
+            }
+        },
+        "update.rosie_firmware": {
+            "state": "off",
+            "attributes": {
+                "friendly_name": "Rosie Firmware",
+                "device_class": "firmware",
+                "installed_version": "1.4.2",
+                "latest_version": "1.4.2"
+            }
+        },
+        "sensor.rosie_total_mileage": {
+            "state": "168.3",
+            "attributes": {
+                "friendly_name": "Rosie Total mileage",
+                "device_class": "distance",
+                "unit_of_measurement": "km"
+            }
+        },
+        "button.rosie_continue_last_job": {
+            "state": "unknown",
+            "attributes": {
+                "friendly_name": "Rosie Continue last job"
+            }
+        },
+        "button.rosie_cancel_current_task": {
+            "state": "unknown",
+            "attributes": {
+                "friendly_name": "Rosie Cancel current task"
+            }
+        }
+    },
+    "devices": {
+        "mower-device": {
+            "name": "Yuka-MNEXAMPLE1",
+            "name_by_user": "Rosie"
+        }
+    },
+    "entities": {
+        "lawn_mower.rosie": {
+            "device_id": "mower-device",
+            "platform": "mammotion"
+        },
+        "sensor.rosie_battery": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "battery_percent"
+        },
+        "binary_sensor.rosie_charging": {
+            "device_id": "mower-device",
+            "platform": "mammotion"
+        },
+        "sensor.rosie_progress": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "progress"
+        },
+        "sensor.rosie_time_left": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "left_time"
+        },
+        "sensor.rosie_elapsed_time": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "elapsed_time"
+        },
+        "sensor.rosie_last_error": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "error_1_message"
+        },
+        "sensor.rosie_last_error_time": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "error_1_time"
+        },
+        "binary_sensor.rosie_rain_detected": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "rain_detected"
+        },
+        "sensor.rosie_rtk_position": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "positioning_mode"
+        },
+        "sensor.rosie_visual_positioning": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "visual_positioning_status"
+        },
+        "sensor.rosie_satellites": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "gps_stars"
+        },
+        "sensor.rosie_blade_used_time": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "blade_used_time"
+        },
+        "sensor.rosie_blade_warning_time": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "blade_used_warn_time"
+        },
+        "update.rosie_firmware": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "update"
+        },
+        "sensor.rosie_total_mileage": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "maintenance_distance",
+            "display_precision": 0
+        },
+        "button.rosie_continue_last_job": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "continue_last_job"
+        },
+        "button.rosie_cancel_current_task": {
+            "device_id": "mower-device",
+            "platform": "mammotion",
+            "translation_key": "cancel_task"
+        }
+    },
+    "shots": [
+        {
+            "name": "mowing",
+            "width": 500,
+            "card": {
+                "type": "custom:mower-status-card",
+                "entity": "lawn_mower.rosie"
+            }
+        },
+        {
+            "name": "problems",
+            "width": 500,
+            "card": {
+                "type": "custom:mower-status-card",
+                "entity": "lawn_mower.rosie"
+            },
+            "states": {
+                "lawn_mower.rosie": {
+                    "state": "paused",
+                    "attributes": {
+                        "friendly_name": "Rosie",
+                        "supported_features": 15
+                    }
+                },
+                "sensor.rosie_battery": {
+                    "state": "28",
+                    "attributes": {
+                        "friendly_name": "Rosie Battery",
+                        "device_class": "battery",
+                        "unit_of_measurement": "%",
+                        "state_class": "measurement"
+                    }
+                },
+                "sensor.rosie_progress": {
+                    "state": "63",
+                    "attributes": {
+                        "friendly_name": "Rosie Progress",
+                        "unit_of_measurement": "%"
+                    }
+                },
+                "sensor.rosie_last_error": {
+                    "state": "mcu: the left wheel is stuck. Clear the obstacle and continue the task",
+                    "attributes": {
+                        "friendly_name": "Rosie Last error"
+                    }
+                },
+                "sensor.rosie_last_error_time": {
+                    "state": "2026-07-15T12:41:00+03:00",
+                    "attributes": {
+                        "friendly_name": "Rosie Last error time",
+                        "device_class": "timestamp"
+                    }
+                },
+                "sensor.rosie_rtk_position": {
+                    "state": "Float",
+                    "attributes": {
+                        "friendly_name": "Rosie RTK position"
+                    }
+                },
+                "sensor.rosie_satellites": {
+                    "state": "12",
+                    "attributes": {
+                        "friendly_name": "Rosie Satellites"
+                    }
+                },
+                "binary_sensor.rosie_rain_detected": {
+                    "state": "on",
+                    "attributes": {
+                        "friendly_name": "Rosie Rain detected",
+                        "device_class": "moisture"
+                    }
+                },
+                "sensor.rosie_blade_used_time": {
+                    "state": "104.2",
+                    "attributes": {
+                        "friendly_name": "Rosie Blade used time",
+                        "device_class": "duration",
+                        "unit_of_measurement": "h"
+                    }
+                },
+                "update.rosie_firmware": {
+                    "state": "on",
+                    "attributes": {
+                        "friendly_name": "Rosie Firmware",
+                        "device_class": "firmware",
+                        "installed_version": "1.4.2",
+                        "latest_version": "1.5.0"
+                    }
+                }
+            }
+        },
+        {
+            "name": "picture",
+            "width": 500,
+            "card": {
+                "type": "custom:mower-status-card",
+                "entity": "lawn_mower.rosie",
+                "image": "/local/example-mower.jpg"
+            }
+        },
+        {
+            "name": "paused",
+            "width": 500,
+            "card": {
+                "type": "custom:mower-status-card",
+                "entity": "lawn_mower.rosie"
+            },
+            "states": {
+                "lawn_mower.rosie": {
+                    "state": "paused",
+                    "attributes": {
+                        "friendly_name": "Rosie",
+                        "supported_features": 15
+                    }
+                },
+                "binary_sensor.rosie_charging": {
+                    "state": "on",
+                    "attributes": {
+                        "friendly_name": "Rosie Charging",
+                        "device_class": "battery_charging"
+                    }
+                },
+                "sensor.rosie_battery": {
+                    "state": "48",
+                    "attributes": {
+                        "friendly_name": "Rosie Battery",
+                        "device_class": "battery",
+                        "unit_of_measurement": "%",
+                        "state_class": "measurement"
+                    }
+                },
+                "sensor.rosie_progress": {
+                    "state": "63",
+                    "attributes": {
+                        "friendly_name": "Rosie Progress",
+                        "unit_of_measurement": "%"
+                    }
+                }
+            }
+        },
+        {
+            "name": "narrow",
+            "width": 260,
+            "card": {
+                "type": "custom:mower-status-card",
+                "entity": "lawn_mower.rosie"
+            }
+        },
+        {
+            "name": "very-narrow",
+            "width": 200,
+            "card": {
+                "type": "custom:mower-status-card",
+                "entity": "lawn_mower.rosie"
+            }
+        }
+    ],
+    "files": ["docs/example-mower.jpg"]
+}
