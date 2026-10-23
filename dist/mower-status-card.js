@@ -1,4 +1,4 @@
-/*! mower-status-card 1.0.0 | MIT License */
+/*! mower-status-card 1.1.0 | MIT License */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -604,7 +604,7 @@ function r5(r6) {
 }
 
 // src/const.ts
-var CARD_VERSION = "1.0.0";
+var CARD_VERSION = "1.1.0";
 var ERROR_FRESH_MS = 24 * 36e5;
 var HISTORY_DAYS = 10;
 var TICK_MS = 6e4;
@@ -661,6 +661,7 @@ var en_default = {
     error: "Error",
     error_text: "{when}. {text}",
     error_generic: "The mower reports an error.",
+    dismiss: "Dismiss",
     positioning: "Weak positioning",
     positioning_generic: "Positioning is weak.",
     positioning_rtk: "RTK positioning is in {state} mode, not Fix.",
@@ -767,6 +768,7 @@ var fi_default = {
     error: "Virhe",
     error_text: "{when}. {text}",
     error_generic: "Ruohonleikkuri ilmoittaa virheest\xE4.",
+    dismiss: "Kuittaa",
     positioning: "Paikannus heikko",
     positioning_generic: "Paikannus on heikko.",
     positioning_rtk: "RTK-paikannus on {state}-tilassa eik\xE4 Fix-tilassa.",
@@ -1230,6 +1232,15 @@ function lastMowingEnd(rows) {
   }
   return end;
 }
+function lastMowingStart(rows) {
+  let start = null;
+  for (let index = 1; index < rows.length; index++) {
+    if (rows[index - 1].s !== "mowing" && rows[index].s === "mowing") {
+      start = (rows[index].lc ?? rows[index].lu) * 1e3;
+    }
+  }
+  return start;
+}
 var MAMMOTION_MODELS = [
   ["Yuka-MN", "yuka_mn"],
   ["Yuka-MV", "yuka_mn_231"],
@@ -1261,12 +1272,23 @@ function weakPositioning(entity, bad) {
   }
   return entity.entity_id.startsWith("binary_sensor.") ? entity.state === "on" : bad.includes(entity.state);
 }
-function notices({ states, mowerState, now, language, bladeWarningHours, format, stateError }) {
+function notices({
+  states,
+  mowerState,
+  now,
+  language,
+  bladeWarningHours,
+  format,
+  stateError,
+  lastStart,
+  dismissed
+}) {
   const found = [];
   const reported = states.error;
   const error = reported && !NO_ERROR.has(reported.state.toLowerCase()) ? errorText(format(reported), language) : null;
   const errorAt = error ? errorTime(states.error_time) : null;
-  if (error && (mowerState === "error" || errorAt !== null && now - errorAt < ERROR_FRESH_MS)) {
+  const over = errorAt !== null && ((lastStart ?? -Infinity) > errorAt || (dismissed ?? -Infinity) >= errorAt);
+  if (error && (mowerState === "error" || errorAt !== null && now - errorAt < ERROR_FRESH_MS && !over)) {
     found.push({ id: "error", level: "red", values: { text: error, time: errorAt === null ? "" : String(errorAt) } });
   } else if (mowerState === "error") {
     found.push({ id: "error", level: "red", values: { text: errorText(stateError, language) ?? "", time: "" } });
@@ -1343,6 +1365,14 @@ function pictureExists(url) {
   }
   return pictureChecks.get(url);
 }
+function storedDismissal(entityId) {
+  try {
+    const stored = Number(localStorage.getItem(`mower-status-card.dismissed.${entityId}`));
+    return stored > 0 ? stored : null;
+  } catch {
+    return null;
+  }
+}
 var MowerStatusCard = class extends i4 {
   constructor() {
     super(...arguments);
@@ -1351,6 +1381,8 @@ var MowerStatusCard = class extends i4 {
     this.framedPictures = /* @__PURE__ */ new Set();
     /** The addresses of pictures that didn't load, without their tokens. */
     this.failedPictures = /* @__PURE__ */ new Set();
+    this.lastStart = null;
+    this.dismissals = /* @__PURE__ */ new Map();
     this.slots = {};
     /** What the mower is doing, in Home Assistant's lawn_mower states, whatever words its integration uses. */
     this.activity = "";
@@ -1439,7 +1471,10 @@ var MowerStatusCard = class extends i4 {
       now: Date.now(),
       language: this.language(),
       bladeWarningHours: this.config.blade_warning_hours,
-      format: (entity) => this.hass.formatEntityState(entity)
+      format: (entity) => this.hass.formatEntityState(entity),
+      lastStart: this.lastStart,
+      // Another card of the same mower on the page may have dismissed a newer error since.
+      dismissed: Math.max(storedDismissal(this.config.entity) ?? 0, this.dismissals.get(this.config.entity) ?? 0) || null
     });
     const seenAs = (notice) => notice.id === "error" ? `error|${notice.values.time || notice.values.text}` : notice.id;
     const ids = new Set(found.map((notice) => notice.id));
@@ -1586,8 +1621,26 @@ var MowerStatusCard = class extends i4 {
                     `
     )}
             </div>
-            ${open ? b2`<div class="detail ${open.level}">${this.chipText(open)}</div>` : A}
+            ${open ? b2`<div class="detail ${open.level}">
+                          <span>${this.chipText(open)}</span>
+                          ${this.dismissible(open) ? b2`<button class="dismiss" @click=${() => this.dismiss(open)}>${this.text("notice.dismiss")}</button>` : A}
+                      </div>` : A}
         `;
+  }
+  /**
+   * An error the mower is past but its sensor still reports, as Mammotion's low battery while it charges. One the
+   * mower is still in stays. The dismissal is kept by the error's time.
+   */
+  dismissible(notice) {
+    return notice.id === "error" && !!notice.values.time && this.activity !== "error";
+  }
+  dismiss(notice) {
+    const entityId = this.config.entity;
+    this.dismissals = new Map(this.dismissals).set(entityId, Number(notice.values.time));
+    try {
+      localStorage.setItem(`mower-status-card.dismissed.${entityId}`, notice.values.time);
+    } catch {
+    }
   }
   chipLabel(notice) {
     return this.text(`notice.${notice.id}`, notice.values);
@@ -1768,7 +1821,7 @@ var MowerStatusCard = class extends i4 {
     }
     return this.framedPictures.has(pictureAddress(this.picture)) ? "own framed" : "own";
   }
-  /** Reads when the mower last stopped mowing, whenever its state changes. */
+  /** Reads when the mower last started and stopped mowing, whenever its state changes. */
   readHistory(mower) {
     if (!mower || !this.hass) {
       return;
@@ -1780,6 +1833,7 @@ var MowerStatusCard = class extends i4 {
     }
     if (!this.historyKey?.startsWith(`${entityId}|`)) {
       this.lastMowed = void 0;
+      this.lastStart = null;
     }
     this.historyKey = key;
     const preset = this.preset;
@@ -1799,6 +1853,7 @@ var MowerStatusCard = class extends i4 {
         const rows = (history[entityId] ?? []).map((row) => ({ ...row, s: activityOf(preset, row.s) }));
         if (!rows.length) {
           this.lastMowed = void 0;
+          this.lastStart = null;
           return;
         }
         if (rows[rows.length - 1].s !== activity) {
@@ -1806,10 +1861,12 @@ var MowerStatusCard = class extends i4 {
         }
         const end = lastMowingEnd(rows);
         this.lastMowed = end === null ? { since: rows[0].lu * 1e3 } : { end };
+        this.lastStart = lastMowingStart(rows);
       },
       () => {
         if (this.historyKey === key) {
           this.lastMowed = void 0;
+          this.lastStart = null;
         }
       }
     );
@@ -2233,6 +2290,10 @@ var MowerStatusCard = class extends i4 {
 
             /* An integration's error can come in steps, one per line. */
             .detail {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                gap: 6px 12px;
                 white-space: pre-line;
                 margin-top: 8px;
                 padding: 9px 11px;
@@ -2240,6 +2301,16 @@ var MowerStatusCard = class extends i4 {
                 font-size: 13px;
                 background: color-mix(in srgb, var(--notice) 15%, transparent);
                 overflow-wrap: anywhere;
+            }
+
+            /* Beside a text short enough to share its line, else on a line of its own, at the right either way. */
+            .dismiss {
+                margin-left: auto;
+                padding: 2px 10px;
+                border: 1px solid currentColor;
+                border-radius: 999px;
+                font-size: 12px;
+                color: var(--notice);
             }
 
             /* Buttons. */
@@ -2375,6 +2446,12 @@ __decorateClass([
 __decorateClass([
   r5()
 ], MowerStatusCard.prototype, "lastMowed", 2);
+__decorateClass([
+  r5()
+], MowerStatusCard.prototype, "lastStart", 2);
+__decorateClass([
+  r5()
+], MowerStatusCard.prototype, "dismissals", 2);
 MowerStatusCard = __decorateClass([
   t3("mower-status-card")
 ], MowerStatusCard);

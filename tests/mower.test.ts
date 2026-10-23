@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HassEntity } from "../src/hass";
-import { errorText, hasTask, lastMowingEnd, mainAction, mammotionPictures, minutesOf, notices } from "../src/mower";
+import { errorText, hasTask, lastMowingEnd, lastMowingStart, mainAction, mammotionPictures, minutesOf, notices } from "../src/mower";
 import { NOW } from "./fixtures";
 
 const plain = (state: HassEntity) => state.state;
@@ -86,6 +86,31 @@ describe("notices", () => {
             values: { text: "Robotti on jumissa" },
         });
         expect(notices({ states, mowerState: "paused", now: NOW + 2 * 3_600_000, language: "fi", format: plain })).toEqual([]);
+    });
+
+    // An error an hour old: whether it shows by the mower's state, the last start of mowing and the user's dismissal.
+    const errorAt = NOW - 3_600_000;
+    it.each([
+        { case: "nothing since", mowerState: "docked", lastStart: null, dismissed: null, shown: true },
+        { case: "mowing started before it", mowerState: "mowing", lastStart: errorAt - 60_000, dismissed: null, shown: true },
+        { case: "mowing started at its own time", mowerState: "mowing", lastStart: errorAt, dismissed: null, shown: true },
+        { case: "mowing started since", mowerState: "mowing", lastStart: errorAt + 60_000, dismissed: null, shown: false },
+        { case: "mowed since, now docked", mowerState: "docked", lastStart: errorAt + 60_000, dismissed: null, shown: false },
+        { case: "dismissed", mowerState: "docked", lastStart: null, dismissed: errorAt, shown: false },
+        { case: "a newer error dismissed", mowerState: "paused", lastStart: null, dismissed: errorAt + 60_000, shown: false },
+        { case: "an older error dismissed", mowerState: "paused", lastStart: null, dismissed: errorAt - 60_000, shown: true },
+        {
+            case: "in error, though dismissed and mowed since",
+            mowerState: "error",
+            lastStart: errorAt + 60_000,
+            dismissed: errorAt,
+            shown: true,
+        },
+    ])("ends an error that is past by mowing since or the user's word: $case", ({ mowerState, lastStart, dismissed, shown }) => {
+        const states = { ...quiet, error: entity("mcu: akku on vähissä"), error_time: entity(new Date(errorAt).toISOString()) };
+        const found = notices({ states, mowerState, now: NOW, language: "fi", format: plain, lastStart, dismissed });
+        // The sensor's own error with its time, not the general error a mower in its error state gets without one.
+        expect(found).toEqual(shown ? [{ id: "error", level: "red", values: { text: "Akku on vähissä", time: String(errorAt) } }] : []);
     });
 
     it("shows an error with no time of its own only while the mower is in error, as its age is unknown", () => {
@@ -238,5 +263,28 @@ describe("mammotionPictures", () => {
         expect(mammotionPictures("Luba-VSEXAMPLE1", "default")).toEqual([]);
         expect(mammotionPictures("Spino-EXAMPLE1", "default")).toEqual([]);
         expect(mammotionPictures(undefined, "default")).toEqual([]);
+    });
+});
+
+describe("lastMowingStart", () => {
+    it("is the last time the mower started mowing, the current mowing included", () => {
+        const rows = [
+            { s: "docked", lu: 100 },
+            { s: "mowing", lu: 200 },
+            { s: "paused", lu: 300 },
+            { s: "mowing", lu: 400, lc: 390 },
+            { s: "mowing", lu: 500 },
+        ];
+        expect(lastMowingStart(rows)).toBe(390_000);
+    });
+
+    it("is null when no mowing started in the history, as one under way when it begins started earlier", () => {
+        expect(
+            lastMowingStart([
+                { s: "mowing", lu: 100 },
+                { s: "returning", lu: 200 },
+            ]),
+        ).toBeNull();
+        expect(lastMowingStart([])).toBeNull();
     });
 });

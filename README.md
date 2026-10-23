@@ -8,8 +8,8 @@ with it, and its buttons.
 <p>
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/mowing-light.png#gh-light-mode-only" width="400" alt="A mower mowing, a ring with the task 46% done, the time left, the battery and the time elapsed beside it, and a large pause button">
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/mowing-dark.png#gh-dark-mode-only" width="400" alt="A mower mowing, a ring with the task 46% done, the time left, the battery and the time elapsed beside it, and a large pause button">
-<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/problems-light.png#gh-light-mode-only" width="400" alt="A paused mower with five problems as chips, an error, weak positioning, worn blades, rain and an update, with the error's text open below them">
-<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/problems-dark.png#gh-dark-mode-only" width="400" alt="A paused mower with five problems as chips, an error, weak positioning, worn blades, rain and an update, with the error's text open below them">
+<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/problems-light.png#gh-light-mode-only" width="400" alt="A paused mower with five problems as chips, an error, weak positioning, worn blades, rain and an update, with the error's text open below them and a button to dismiss it">
+<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/problems-dark.png#gh-dark-mode-only" width="400" alt="A paused mower with five problems as chips, an error, weak positioning, worn blades, rain and an update, with the error's text open below them and a button to dismiss it">
 </p>
 
 ## What is it?
@@ -110,10 +110,14 @@ editor, which shows what was found for each slot.
 
 Each problem is a chip, the most severe first. The chip's text opens below the chips when it is chosen, and closes when
 it is chosen again. The most severe one opens by itself when a problem appears that hasn't been seen since the page
-was opened, so rain that comes and goes doesn't keep opening it. An error with a new time or text counts as new.
+was opened, so rain that comes and goes doesn't keep opening it. An error with a new time counts as new, and one without
+a time when its text is new.
 
 - **Error:** the last error for as long as the mower is in its error state, and otherwise for 24 hours after it happened
-  by the error time sensor. A source prefix such as "mcu:" is dropped, and an error in several lines keeps them. A
+  by the error time sensor. Many mowers keep reporting their last error after it is over, such as a low battery while
+  they charge, so an error ends sooner once the mower starts mowing again, or when it is dismissed. Its text has a
+  button for that once the mower is out of its error state. The dismissal is remembered in this browser only, and a
+  newer error shows again. A source prefix such as "mcu:" is dropped, and an error in several lines keeps them. A
   sensor's own word for no error, such as `no_error`, is no error, and an error from a list of codes shows as Home
   Assistant translates it. A mower in its error state with no error text gets a general error, or the integration's own
   word for that state where it has one.
@@ -195,8 +199,8 @@ show_cancel: false
 ## Data
 
 Everything comes from the mower's entities in Home Assistant, and when it last mowed from Home Assistant's history of
-the mower, the last 10 days of it by default. The card fetches nothing else, apart from checking whether
-ha-mammotion-assets has the model's picture.
+the mower, the last 10 days of it by default. A dismissed error is kept in the browser's own storage. The card fetches
+nothing else, apart from checking whether ha-mammotion-assets has the model's picture.
 
 The card has been tested with [Mammotion](https://github.com/mikey0000/Mammotion-HA) and
 [Sunseeker](https://github.com/Sdahl1234/Sunseeker-lawn-mower) mowers. The Sunseeker preset follows the states in the

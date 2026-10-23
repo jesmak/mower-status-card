@@ -77,6 +77,17 @@ export function lastMowingEnd(rows: Array<{ s: string; lu: number; lc?: number }
     return end;
 }
 
+/** When the last mowing in the mower's history (newest last) started, in milliseconds, or null when none started in it. */
+export function lastMowingStart(rows: Array<{ s: string; lu: number; lc?: number }>): number | null {
+    let start: number | null = null;
+    for (let index = 1; index < rows.length; index++) {
+        if (rows[index - 1].s !== "mowing" && rows[index].s === "mowing") {
+            start = (rows[index].lc ?? rows[index].lu) * 1000;
+        }
+    }
+    return start;
+}
+
 /** Device name prefixes to the stem of the picture ha-mammotion-assets has of the model. The longest prefix that fits wins. */
 const MAMMOTION_MODELS: Array<[string, string | null]> = [
     ["Yuka-MN", "yuka_mn"],
@@ -116,6 +127,10 @@ export interface NoticeInput {
     format: (entity: HassEntity) => string;
     /** An error's text the integration put in place of the mower's state, as an older Sunseeker does. */
     stateError?: string;
+    /** When the mower last started mowing, from its history. An error from before that is over. */
+    lastStart?: number | null;
+    /** The time of the error the user dismissed in this browser. It and any older error are over. */
+    dismissed?: number | null;
 }
 
 /** Whether a positioning sensor says it is weak: Mammotion's own values, or "on" from a binary sensor of any integration. */
@@ -127,15 +142,29 @@ function weakPositioning(entity: HassEntity | undefined, bad: string[]): boolean
 }
 
 /** What is wrong, the most severe first. Nothing is a notice while it is fine. */
-export function notices({ states, mowerState, now, language, bladeWarningHours, format, stateError }: NoticeInput): Notice[] {
+export function notices({
+    states,
+    mowerState,
+    now,
+    language,
+    bladeWarningHours,
+    format,
+    stateError,
+    lastStart,
+    dismissed,
+}: NoticeInput): Notice[] {
     const found: Notice[] = [];
 
     const reported = states.error;
     const error = reported && !NO_ERROR.has(reported.state.toLowerCase()) ? errorText(format(reported), language) : null;
     // An error without a time of its own is shown only while the mower is in its error state, as its age is unknown.
     const errorAt = error ? errorTime(states.error_time) : null;
+    // An error sensor keeps its last error after the mower is past it, as Mammotion's does. Mowing started since, or the
+    // user's word, ends it sooner. An older error counts as dismissed too, as Mammotion's error time can step back to an
+    // earlier error's.
+    const over = errorAt !== null && ((lastStart ?? -Infinity) > errorAt || (dismissed ?? -Infinity) >= errorAt);
     // While the mower stays in error its error stays, however old. The text box carries its date.
-    if (error && (mowerState === "error" || (errorAt !== null && now - errorAt < ERROR_FRESH_MS))) {
+    if (error && (mowerState === "error" || (errorAt !== null && now - errorAt < ERROR_FRESH_MS && !over))) {
         found.push({ id: "error", level: "red", values: { text: error, time: errorAt === null ? "" : String(errorAt) } });
     } else if (mowerState === "error") {
         found.push({ id: "error", level: "red", values: { text: errorText(stateError, language) ?? "", time: "" } });

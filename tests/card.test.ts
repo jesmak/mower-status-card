@@ -38,6 +38,8 @@ describe("mower-status-card", () => {
     });
 
     afterEach(() => {
+        vi.restoreAllMocks();
+        localStorage.clear();
         vi.unstubAllGlobals();
         vi.useRealTimers();
         document.body.innerHTML = "";
@@ -110,7 +112,7 @@ describe("mower-status-card", () => {
         );
         const chips = [...root(element).querySelectorAll<HTMLButtonElement>(".chip")];
         expect(chips.map(text)).toEqual(["Virhe", "Sataa"]);
-        expect(text(root(element).querySelector(".detail"))).toBe("Tänään klo 14.00. Robotti on jumissa");
+        expect(text(root(element).querySelector(".detail span"))).toBe("Tänään klo 14.00. Robotti on jumissa");
 
         chips[1].click();
         await element.updateComplete;
@@ -242,6 +244,72 @@ describe("mower-status-card", () => {
         element.hass = error("terä on jumissa", 5);
         await element.updateComplete;
         expect(text(root(element).querySelector(".detail"))).toContain("Terä on jumissa");
+    });
+
+    function lowBattery(mowerState: string, minutesAgo = 60): HomeAssistant {
+        return mockHass({
+            "lawn_mower.matti": { state: mowerState },
+            "sensor.matti_last_error": { state: "mcu: akku on vähissä" },
+            "sensor.matti_last_error_time": { state: new Date(NOW - minutesAgo * 60_000).toISOString() },
+        });
+    }
+
+    it("dismisses an error the mower is past, in this browser, until a newer one comes", async () => {
+        const element = await card(lowBattery("docked"));
+        root(element).querySelector<HTMLButtonElement>(".dismiss")!.click();
+        await element.updateComplete;
+        expect(root(element).querySelector(".chip")).toBeNull();
+        expect(root(element).querySelector(".detail")).toBeNull();
+        expect(localStorage.getItem("mower-status-card.dismissed.lawn_mower.matti")).toBe(String(NOW - 3_600_000));
+
+        document.body.innerHTML = "";
+        const again = await card(lowBattery("docked"));
+        expect(root(again).querySelector(".chip")).toBeNull();
+
+        again.hass = lowBattery("docked", 5);
+        await again.updateComplete;
+        expect(text(root(again).querySelector(".detail span"))).toBe("Tänään klo 14.55. Akku on vähissä");
+    });
+
+    it("keeps a dismissal for the page when the browser refuses its storage", async () => {
+        for (const method of ["getItem", "setItem"] as const) {
+            vi.spyOn(Storage.prototype, method).mockImplementation(() => {
+                throw new Error("refused");
+            });
+        }
+        const element = await card(lowBattery("docked"));
+        expect(text(root(element).querySelector(".detail span"))).toBe("Tänään klo 14.00. Akku on vähissä");
+        root(element).querySelector<HTMLButtonElement>(".dismiss")!.click();
+        await element.updateComplete;
+        expect(root(element).querySelector(".chip")).toBeNull();
+    });
+
+    it("keeps a dismissal to the mower it was made for", async () => {
+        localStorage.setItem("mower-status-card.dismissed.lawn_mower.pentti", String(NOW));
+        const element = await card(lowBattery("docked"));
+        expect(text(root(element).querySelector(".detail span"))).toBe("Tänään klo 14.00. Akku on vähissä");
+    });
+
+    it("offers no dismissal while the mower is in its error state, as the error is still on", async () => {
+        localStorage.setItem("mower-status-card.dismissed.lawn_mower.matti", String(NOW));
+        const element = await card(lowBattery("error"));
+        expect(text(root(element).querySelector(".chip"))).toBe("Virhe");
+        expect(text(root(element).querySelector(".detail span"))).toBe("Tänään klo 14.00. Akku on vähissä");
+        expect(root(element).querySelector(".dismiss")).toBeNull();
+    });
+
+    it.each([
+        { case: "started after the error", startedMinutesAgo: 30, shown: false },
+        { case: "started before the error", startedMinutesAgo: 90, shown: true },
+    ])("ends an error by mowing started since, not before: $case", async ({ startedMinutesAgo, shown }) => {
+        const state = lowBattery("mowing");
+        history(state, [
+            { s: "docked", lu: (NOW - 3 * 3_600_000) / 1000 },
+            { s: "mowing", lu: (NOW - startedMinutesAgo * 60_000) / 1000 },
+        ]);
+        const element = await card(state);
+        await settled(element);
+        expect(text(root(element).querySelector(".chip"))).toBe(shown ? "Virhe" : "");
     });
 
     it("doesn't call a mowing mower charging, though its charging sensor hasn't caught up", async () => {

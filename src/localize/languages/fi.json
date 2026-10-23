@@ -44,6 +44,7 @@
         "error": "Virhe",
         "error_text": "{when}. {text}",
         "error_generic": "Ruohonleikkuri ilmoittaa virheestä.",
+        "dismiss": "Kuittaa",
         "positioning": "Paikannus heikko",
         "positioning_generic": "Paikannus on heikko.",
         "positioning_rtk": "RTK-paikannus on {state}-tilassa eikä Fix-tilassa.",

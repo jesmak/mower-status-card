@@ -22,7 +22,7 @@ import {
 import "./editor";
 import type { HassEntity, HomeAssistant } from "./hass";
 import { browserLanguage, translate, translateOwn } from "./localize/localize";
-import { hasTask, lastMowingEnd, mainAction, mammotionPictures, minutesOf, notices, numberOf } from "./mower";
+import { hasTask, lastMowingEnd, lastMowingStart, mainAction, mammotionPictures, minutesOf, notices, numberOf } from "./mower";
 import type { MainAction } from "./mower";
 import { activityOf, domain, platformOf, presetOf, resolveSlots } from "./slots";
 import type { Preset } from "./slots";
@@ -74,6 +74,16 @@ function pictureExists(url: string): Promise<boolean> {
     return pictureChecks.get(url)!;
 }
 
+/** The time of the error the user dismissed for a mower, kept in this browser only. Null when storage is refused. */
+function storedDismissal(entityId: string): number | null {
+    try {
+        const stored = Number(localStorage.getItem(`mower-status-card.dismissed.${entityId}`));
+        return stored > 0 ? stored : null;
+    } catch {
+        return null;
+    }
+}
+
 interface Action {
     action: "perform-action";
     perform_action: string;
@@ -97,6 +107,10 @@ export class MowerStatusCard extends LitElement {
      * history has been read, and when there is none, such as for a mower the recorder leaves out.
      */
     @state() private lastMowed?: { end: number } | { since: number };
+    /** When the last mowing in the history started, which ends any error from before it. */
+    @state() private lastStart: number | null = null;
+    /** Dismissed errors by mower, for a browser that refuses to store them, such as in a private window. */
+    @state() private dismissals = new Map<string, number>();
     private slots: Partial<Record<Slot, string>> = {};
     /** What the mower is doing, in Home Assistant's lawn_mower states, whatever words its integration uses. */
     private activity = "";
@@ -183,10 +197,13 @@ export class MowerStatusCard extends LitElement {
             language: this.language(),
             bladeWarningHours: this.config.blade_warning_hours,
             format: (entity) => this.hass!.formatEntityState(entity),
+            lastStart: this.lastStart,
+            // Another card of the same mower on the page may have dismissed a newer error since.
+            dismissed: Math.max(storedDismissal(this.config.entity) ?? 0, this.dismissals.get(this.config.entity) ?? 0) || null,
         });
         // A notice not seen since the page was opened opens the most severe one, even after the user closed the box. One
         // that comes and goes, such as rain in showers, doesn't open it again.
-        // An error is new when its time or text is, the others when their kind is.
+        // An error is new when its time is, or its text when it has no time, the others when their kind is.
         const seenAs = (notice: Notice) => (notice.id === "error" ? `error|${notice.values.time || notice.values.text}` : notice.id);
         const ids = new Set(found.map((notice) => notice.id));
         const arrived = found.some((notice) => !this.seenNotices.has(seenAs(notice)));
@@ -370,8 +387,37 @@ export class MowerStatusCard extends LitElement {
                     `,
                 )}
             </div>
-            ${open ? html`<div class="detail ${open.level}">${this.chipText(open)}</div>` : nothing}
+            ${
+                open
+                    ? html`<div class="detail ${open.level}">
+                          <span>${this.chipText(open)}</span>
+                          ${
+                              this.dismissible(open)
+                                  ? html`<button class="dismiss" @click=${() => this.dismiss(open)}>${this.text("notice.dismiss")}</button>`
+                                  : nothing
+                          }
+                      </div>`
+                    : nothing
+            }
         `;
+    }
+
+    /**
+     * An error the mower is past but its sensor still reports, as Mammotion's low battery while it charges. One the
+     * mower is still in stays. The dismissal is kept by the error's time.
+     */
+    private dismissible(notice: Notice): boolean {
+        return notice.id === "error" && !!notice.values.time && this.activity !== "error";
+    }
+
+    private dismiss(notice: Notice): void {
+        const entityId = this.config!.entity;
+        this.dismissals = new Map(this.dismissals).set(entityId, Number(notice.values.time));
+        try {
+            localStorage.setItem(`mower-status-card.dismissed.${entityId}`, notice.values.time);
+        } catch {
+            // Kept for this page only, in dismissals.
+        }
     }
 
     private chipLabel(notice: Notice): string {
@@ -608,7 +654,7 @@ export class MowerStatusCard extends LitElement {
         this.pictureKey = undefined;
     };
 
-    /** Reads when the mower last stopped mowing, whenever its state changes. */
+    /** Reads when the mower last started and stopped mowing, whenever its state changes. */
     private readHistory(mower: HassEntity | undefined): void {
         if (!mower || !this.hass) {
             return;
@@ -622,6 +668,7 @@ export class MowerStatusCard extends LitElement {
         // Another mower's time would show until its own history arrives, so it goes first.
         if (!this.historyKey?.startsWith(`${entityId}|`)) {
             this.lastMowed = undefined;
+            this.lastStart = null;
         }
         this.historyKey = key;
         const preset = this.preset;
@@ -644,6 +691,7 @@ export class MowerStatusCard extends LitElement {
                     const rows = (history[entityId] ?? []).map((row) => ({ ...row, s: activityOf(preset, row.s) }));
                     if (!rows.length) {
                         this.lastMowed = undefined;
+                        this.lastStart = null;
                         return;
                     }
                     // The recorder writes its database every few seconds, so the change that started this read is often not
@@ -653,10 +701,12 @@ export class MowerStatusCard extends LitElement {
                     }
                     const end = lastMowingEnd(rows);
                     this.lastMowed = end === null ? { since: rows[0].lu * 1000 } : { end };
+                    this.lastStart = lastMowingStart(rows);
                 },
                 () => {
                     if (this.historyKey === key) {
                         this.lastMowed = undefined;
+                        this.lastStart = null;
                     }
                 },
             );
@@ -1135,6 +1185,10 @@ export class MowerStatusCard extends LitElement {
 
             /* An integration's error can come in steps, one per line. */
             .detail {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: baseline;
+                gap: 6px 12px;
                 white-space: pre-line;
                 margin-top: 8px;
                 padding: 9px 11px;
@@ -1142,6 +1196,16 @@ export class MowerStatusCard extends LitElement {
                 font-size: 13px;
                 background: color-mix(in srgb, var(--notice) 15%, transparent);
                 overflow-wrap: anywhere;
+            }
+
+            /* Beside a text short enough to share its line, else on a line of its own, at the right either way. */
+            .dismiss {
+                margin-left: auto;
+                padding: 2px 10px;
+                border: 1px solid currentColor;
+                border-radius: 999px;
+                font-size: 12px;
+                color: var(--notice);
             }
 
             /* Buttons. */

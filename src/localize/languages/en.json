@@ -44,6 +44,7 @@
         "error": "Error",
         "error_text": "{when}. {text}",
         "error_generic": "The mower reports an error.",
+        "dismiss": "Dismiss",
         "positioning": "Weak positioning",
         "positioning_generic": "Positioning is weak.",
         "positioning_rtk": "RTK positioning is in {state} mode, not Fix.",
