@@ -1,12 +1,13 @@
 /**
- * The card's visual editor: the mower, its name and picture, the blade limit, and the companion entities the card
- * found, each of which can be swapped or turned off. Only what differs from what was found is written.
+ * The card's visual editor: the mower, its name and picture, the blade limit, the card's height, and the companion
+ * entities the card found, each of which can be swapped or turned off. Only what differs from what was found is written.
  */
 import { LitElement, css, html, nothing } from "lit";
 import type { CSSResultGroup, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
 import type { HomeAssistant } from "./hass";
+import { heightData, heightSchema, tidyHeight } from "./height";
 import { browserLanguage, translate } from "./localize/localize";
 import { SLOT_DOMAINS, detectSlots, platformOf, slotChanges } from "./slots";
 import { NONE, SLOTS } from "./types";
@@ -22,7 +23,7 @@ const DEFAULTS: Record<string, unknown> = {
     image_variant: "default",
 };
 
-function mainSchema(mammotion: boolean, text: (key: string) => string) {
+function mainSchema(config: MowerStatusCardConfig, mammotion: boolean, text: (key: string) => string) {
     return [
         { name: "entity", required: true, selector: { entity: { domain: "lawn_mower" } } },
         { name: "name", selector: { text: {} } },
@@ -55,6 +56,7 @@ function mainSchema(mammotion: boolean, text: (key: string) => string) {
         },
         { name: "show_cancel", selector: { boolean: {} } },
         { name: "blade_warning_hours", selector: { number: { min: 0, max: 5000, step: 1, mode: "box", unit_of_measurement: "h" } } },
+        ...heightSchema(config, text),
     ];
 }
 
@@ -73,13 +75,13 @@ export class MowerStatusCardEditor extends LitElement {
         if (!this.hass) {
             return nothing;
         }
-        const data = { ...DEFAULTS, ...this.config };
+        const data = heightData({ ...DEFAULTS, ...this.config });
         const mammotion = !!this.config.entity && platformOf(this.hass, this.config.entity) === "mammotion";
         return html`
             <ha-form
                 .hass=${this.hass}
                 .data=${data}
-                .schema=${mainSchema(mammotion, (key) => this.text(key))}
+                .schema=${mainSchema(this.config, mammotion, (key) => this.text(key))}
                 .computeLabel=${(entry: SchemaEntry) => this.text(`editor.${entry.name}`)}
                 .computeHelper=${(entry: SchemaEntry) => this.helper(entry.name)}
                 @value-changed=${this.mainChanged}
@@ -127,7 +129,7 @@ export class MowerStatusCardEditor extends LitElement {
     }
 
     private mainChanged(event: CustomEvent<{ value: MowerStatusCardConfig }>): void {
-        const config: MowerStatusCardConfig = { ...event.detail.value };
+        const config: MowerStatusCardConfig = tidyHeight(event.detail.value);
         // Another mower has entities, a model, a picture, a name and blades of its own, so what was set for the last one goes.
         if (config.entity !== this.config.entity) {
             delete config.entities;

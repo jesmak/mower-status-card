@@ -3,6 +3,7 @@
         "name": "Mower status",
         "description": "A robotic lawn mower's state, battery, the task under way, its problems and its buttons",
         "invalid_configuration": "Invalid configuration. Choose a lawn mower.",
+        "invalid_height": "Invalid height. height and max_height must be positive numbers of pixels, and height_mode auto, fixed or max.",
         "no_entity": "Entity {entity} not found",
         "unavailable": "Unavailable",
         "charging": "charging",
@@ -75,7 +76,16 @@
         "blade_warning_hours": "Blade limit",
         "blade_warning_hours_helper": "In hours, when the mower reports none of its own",
         "entities": "Entities",
-        "entities_helper": "The card tries to find these on the mower's device automatically. Pick another entity or empty the field if the choice is wrong."
+        "entities_helper": "The card tries to find these on the mower's device automatically. Pick another entity or empty the field if the choice is wrong.",
+        "height_mode": "Height",
+        "height_mode_helper": "A height set in the layout tab of a sections view is used instead.",
+        "height_mode_auto": "Fits the content",
+        "height_mode_fixed": "Fixed",
+        "height_mode_max": "Grows up to a limit",
+        "height": "Fixed height",
+        "height_helper": "The card is always this tall, and the notices scroll inside it.",
+        "max_height": "Maximum height",
+        "max_height_helper": "The card grows with its content up to this height, and then the notices scroll."
     },
     "slot": {
         "battery": "Battery",

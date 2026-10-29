@@ -1,4 +1,4 @@
-/*! mower-status-card 1.1.0 | MIT License */
+/*! mower-status-card 1.2.0 | MIT License */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -604,7 +604,7 @@ function r5(r6) {
 }
 
 // src/const.ts
-var CARD_VERSION = "1.1.0";
+var CARD_VERSION = "1.2.0";
 var ERROR_FRESH_MS = 24 * 36e5;
 var HISTORY_DAYS = 10;
 var TICK_MS = 6e4;
@@ -614,12 +614,77 @@ var FEATURE_DOCK = 4;
 var FEATURE_STOP = 8;
 var MAMMOTION_ASSETS = "/hacsfiles/ha-mammotion-assets/dist/assets";
 
+// src/height.ts
+var HEIGHT_MODES = ["auto", "fixed", "max"];
+var pixels = (value) => value == null || typeof value === "number" && Number.isFinite(value) && value > 0;
+function validHeight(config) {
+  return (config.height_mode == null || HEIGHT_MODES.includes(config.height_mode)) && pixels(config.height) && pixels(config.max_height);
+}
+function heightMode(config) {
+  return config.height_mode ?? (config.height ? "fixed" : config.max_height ? "max" : "auto");
+}
+var ROW_HEIGHT = 56;
+var ROW_GAP = 8;
+function heightStyle(config, layout, minimum = 0) {
+  const rows = config.grid_options ? config.grid_options.rows : config.layout_options?.grid_rows;
+  if (layout === "grid" && typeof rows === "number") {
+    return "height: 100%";
+  }
+  const mode = heightMode(config);
+  if (mode === "fixed" && config.height) {
+    return `height: ${Math.max(config.height, minimum)}px`;
+  }
+  return mode === "max" && config.max_height ? `max-height: ${Math.max(config.max_height, minimum)}px` : "";
+}
+function gridMinRows(minimum) {
+  return Math.max(1, Math.ceil((minimum + ROW_GAP) / (ROW_HEIGHT + ROW_GAP)));
+}
+function heightCardSize(config, content, minimum = 0) {
+  const mode = heightMode(config);
+  if (mode === "fixed" && config.height) {
+    return Math.max(1, Math.round(Math.max(config.height, minimum) / 50));
+  }
+  return mode === "max" && config.max_height ? Math.max(1, Math.min(content, Math.round(Math.max(config.max_height, minimum) / 50))) : content;
+}
+function heightSchema(config, text) {
+  const mode = heightMode(config);
+  const field = (name) => ({
+    name,
+    selector: { number: { min: 100, max: 2e3, step: 10, unit_of_measurement: "px", mode: "box" } }
+  });
+  return [
+    {
+      name: "height_mode",
+      selector: {
+        select: { mode: "dropdown", options: HEIGHT_MODES.map((value) => ({ value, label: text(`editor.height_mode_${value}`) })) }
+      }
+    },
+    ...mode === "fixed" ? [field("height")] : mode === "max" ? [field("max_height")] : []
+  ];
+}
+function heightData(config) {
+  return { ...config, height_mode: heightMode(config) };
+}
+function tidyHeight(config) {
+  const tidied = { ...config };
+  for (const key of ["height", "max_height"]) {
+    if (!tidied[key]) {
+      delete tidied[key];
+    }
+  }
+  if (!tidied.height_mode || heightMode({ ...tidied, height_mode: void 0 }) === tidied.height_mode) {
+    delete tidied.height_mode;
+  }
+  return tidied;
+}
+
 // src/localize/languages/en.json
 var en_default = {
   common: {
     name: "Mower status",
     description: "A robotic lawn mower's state, battery, the task under way, its problems and its buttons",
     invalid_configuration: "Invalid configuration. Choose a lawn mower.",
+    invalid_height: "Invalid height. height and max_height must be positive numbers of pixels, and height_mode auto, fixed or max.",
     no_entity: "Entity {entity} not found",
     unavailable: "Unavailable",
     charging: "charging",
@@ -692,7 +757,16 @@ var en_default = {
     blade_warning_hours: "Blade limit",
     blade_warning_hours_helper: "In hours, when the mower reports none of its own",
     entities: "Entities",
-    entities_helper: "The card tries to find these on the mower's device automatically. Pick another entity or empty the field if the choice is wrong."
+    entities_helper: "The card tries to find these on the mower's device automatically. Pick another entity or empty the field if the choice is wrong.",
+    height_mode: "Height",
+    height_mode_helper: "A height set in the layout tab of a sections view is used instead.",
+    height_mode_auto: "Fits the content",
+    height_mode_fixed: "Fixed",
+    height_mode_max: "Grows up to a limit",
+    height: "Fixed height",
+    height_helper: "The card is always this tall, and the notices scroll inside it.",
+    max_height: "Maximum height",
+    max_height_helper: "The card grows with its content up to this height, and then the notices scroll."
   },
   slot: {
     battery: "Battery",
@@ -727,6 +801,7 @@ var fi_default = {
     name: "Ruohonleikkurin tila",
     description: "Robottiruohonleikkurin tila, akku, k\xE4ynniss\xE4 oleva teht\xE4v\xE4, ongelmat ja painikkeet",
     invalid_configuration: "Virheellinen konfiguraatio. Valitse ruohonleikkuri.",
+    invalid_height: "Virheellinen korkeus. Korkeuksien (height ja max_height) on oltava positiivisia lukuja pikselein\xE4, ja korkeustilan (height_mode) auto, fixed tai max.",
     no_entity: "Entiteetti\xE4 {entity} ei l\xF6ydy",
     unavailable: "Ei saatavilla",
     charging: "lataa",
@@ -799,7 +874,16 @@ var fi_default = {
     blade_warning_hours: "Terien vaihtoraja",
     blade_warning_hours_helper: "Tunteina, jos ruohonleikkuri ei kerro omaansa",
     entities: "Entiteetit",
-    entities_helper: "Kortti yritt\xE4\xE4 l\xF6yt\xE4\xE4 n\xE4m\xE4 ruohonleikkurin laitteelta automaattisesti. Vaihda entiteetti toiseen tai tyhjenn\xE4 kentt\xE4, mik\xE4li valinta on v\xE4\xE4r\xE4."
+    entities_helper: "Kortti yritt\xE4\xE4 l\xF6yt\xE4\xE4 n\xE4m\xE4 ruohonleikkurin laitteelta automaattisesti. Vaihda entiteetti toiseen tai tyhjenn\xE4 kentt\xE4, mik\xE4li valinta on v\xE4\xE4r\xE4.",
+    height_mode: "Korkeus",
+    height_mode_helper: "Osioihin jaetun n\xE4kym\xE4n asettelu-v\xE4lilehdell\xE4 asetettu korkeus ohittaa t\xE4m\xE4n.",
+    height_mode_auto: "Sis\xE4ll\xF6n mukaan",
+    height_mode_fixed: "Kiinte\xE4",
+    height_mode_max: "Kasvaa rajaan asti",
+    height: "Kiinte\xE4 korkeus",
+    height_helper: "Kortti on aina n\xE4in korkea, ja ilmoitukset vieriv\xE4t sen sis\xE4ll\xE4.",
+    max_height: "Enimm\xE4iskorkeus",
+    max_height_helper: "Kortti kasvaa sis\xE4lt\xF6ns\xE4 mukana t\xE4h\xE4n korkeuteen asti, ja sen j\xE4lkeen ilmoitukset vieriv\xE4t."
   },
   slot: {
     battery: "Akku",
@@ -1031,7 +1115,7 @@ var DEFAULTS = {
   show_cancel: true,
   image_variant: "default"
 };
-function mainSchema(mammotion, text) {
+function mainSchema(config, mammotion, text) {
   return [
     { name: "entity", required: true, selector: { entity: { domain: "lawn_mower" } } },
     { name: "name", selector: { text: {} } },
@@ -1061,7 +1145,8 @@ function mainSchema(mammotion, text) {
       ]
     },
     { name: "show_cancel", selector: { boolean: {} } },
-    { name: "blade_warning_hours", selector: { number: { min: 0, max: 5e3, step: 1, mode: "box", unit_of_measurement: "h" } } }
+    { name: "blade_warning_hours", selector: { number: { min: 0, max: 5e3, step: 1, mode: "box", unit_of_measurement: "h" } } },
+    ...heightSchema(config, text)
   ];
 }
 var SLOTS_SCHEMA = SLOTS.map((slot) => ({ name: slot, selector: { entity: { domain: SLOT_DOMAINS[slot] } } }));
@@ -1077,13 +1162,13 @@ var MowerStatusCardEditor = class extends i4 {
     if (!this.hass) {
       return A;
     }
-    const data = { ...DEFAULTS, ...this.config };
+    const data = heightData({ ...DEFAULTS, ...this.config });
     const mammotion = !!this.config.entity && platformOf(this.hass, this.config.entity) === "mammotion";
     return b2`
             <ha-form
                 .hass=${this.hass}
                 .data=${data}
-                .schema=${mainSchema(mammotion, (key) => this.text(key))}
+                .schema=${mainSchema(this.config, mammotion, (key) => this.text(key))}
                 .computeLabel=${(entry) => this.text(`editor.${entry.name}`)}
                 .computeHelper=${(entry) => this.helper(entry.name)}
                 @value-changed=${this.mainChanged}
@@ -1128,7 +1213,7 @@ var MowerStatusCardEditor = class extends i4 {
         `;
   }
   mainChanged(event) {
-    const config = { ...event.detail.value };
+    const config = tidyHeight(event.detail.value);
     if (config.entity !== this.config.entity) {
       delete config.entities;
       delete config.image_variant;
@@ -1182,6 +1267,104 @@ __decorateClass([
 MowerStatusCardEditor = __decorateClass([
   t3("mower-status-card-editor")
 ], MowerStatusCardEditor);
+
+// src/fade.ts
+var fadeStyles = i`
+    .fades {
+        --fade-length: min(24px, 25%);
+        scroll-padding-block: calc(var(--fade-top-offset, 0px) + var(--fade-length, 24px)) var(--fade-length, 24px);
+    }
+
+    .fade-top {
+        mask-image: linear-gradient(
+            to bottom,
+            #000 var(--fade-top-offset, 0px),
+            transparent var(--fade-top-offset, 0px),
+            #000 calc(var(--fade-top-offset, 0px) + var(--fade-length, 24px))
+        );
+    }
+
+    .fade-bottom {
+        mask-image: linear-gradient(to top, transparent, #000 var(--fade-length, 24px));
+    }
+
+    .fade-top.fade-bottom {
+        mask-image: linear-gradient(
+            to bottom,
+            #000 var(--fade-top-offset, 0px),
+            transparent var(--fade-top-offset, 0px),
+            #000 calc(var(--fade-top-offset, 0px) + var(--fade-length, 24px)),
+            #000 calc(100% - var(--fade-length, 24px)),
+            transparent
+        );
+    }
+`;
+function markFade(part) {
+  const hidden = part.scrollHeight - part.clientHeight;
+  part.classList.toggle("fade-top", hidden > 1 && part.scrollTop > 1);
+  part.classList.toggle("fade-bottom", hidden > 1 && hidden - part.scrollTop > 1);
+}
+var onScroll = (event) => markFade(event.currentTarget);
+var ScrollFade = class {
+  constructor(host, parts) {
+    this.host = host;
+    this.parts = parts;
+    /** Each followed part with the children whose size it watches. */
+    this.followed = /* @__PURE__ */ new Map();
+    this.resized = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver((entries) => {
+      for (const { target } of entries) {
+        const part = this.followed.has(target) ? target : target.parentElement;
+        if (part && this.followed.has(part)) {
+          markFade(part);
+        }
+      }
+    });
+    host.addController(this);
+  }
+  hostConnected() {
+    if (this.host.hasUpdated) {
+      this.follow();
+    }
+  }
+  hostUpdated() {
+    if (this.host.isConnected) {
+      this.follow();
+    }
+  }
+  hostDisconnected() {
+    for (const part of [...this.followed.keys()]) {
+      this.forget(part);
+    }
+  }
+  follow() {
+    const now = new Set(this.parts());
+    for (const part of [...this.followed.keys()]) {
+      if (!now.has(part)) {
+        this.forget(part);
+      }
+    }
+    for (const part of now) {
+      if (!this.followed.has(part)) {
+        part.addEventListener("scroll", onScroll, { passive: true });
+        this.resized?.observe(part);
+      }
+      part.classList.add("fades");
+      const before = this.followed.get(part) ?? [];
+      const children = [...part.children];
+      before.filter((child) => !children.includes(child)).forEach((child) => this.resized?.unobserve(child));
+      children.filter((child) => !before.includes(child)).forEach((child) => this.resized?.observe(child));
+      this.followed.set(part, children);
+      markFade(part);
+    }
+  }
+  forget(part) {
+    this.followed.get(part)?.forEach((child) => this.resized?.unobserve(child));
+    this.followed.delete(part);
+    part.removeEventListener("scroll", onScroll);
+    this.resized?.unobserve(part);
+    part.classList.remove("fades", "fade-top", "fade-bottom");
+  }
+};
 
 // src/mower.ts
 var TASK_STATES = /* @__PURE__ */ new Set(["mowing", "paused", "returning", "error"]);
@@ -1375,7 +1558,7 @@ function storedDismissal(entityId) {
 }
 var MowerStatusCard = class extends i4 {
   constructor() {
-    super(...arguments);
+    super();
     this.selected = null;
     this.picture = null;
     this.framedPictures = /* @__PURE__ */ new Set();
@@ -1414,6 +1597,7 @@ var MowerStatusCard = class extends i4 {
       this.picture = null;
       this.pictureKey = void 0;
     };
+    new ScrollFade(this, () => this.heightStyle() ? this.renderRoot.querySelectorAll(".notices") : []);
   }
   static getConfigElement() {
     return document.createElement("mower-status-card-editor");
@@ -1426,14 +1610,31 @@ var MowerStatusCard = class extends i4 {
     if (!config || typeof config.entity !== "string" || domain(config.entity) !== "lawn_mower") {
       throw new Error(translate(browserLanguage(), "common.invalid_configuration"));
     }
+    if (!validHeight(config)) {
+      throw new Error(translate(browserLanguage(), "common.invalid_height"));
+    }
     this.config = { ...config };
   }
   getCardSize() {
-    return 4;
+    return heightCardSize(this.config ?? {}, 4, this.minimumHeight());
   }
-  /** In a sections view the card takes a whole section by default and is never narrower than half of one. */
+  /**
+   * In a sections view the card takes a whole section by default and is never narrower than half of one, nor lower
+   * than its minimum.
+   */
   getGridOptions() {
-    return { columns: 12, min_columns: 6, rows: "auto" };
+    return { columns: 12, min_columns: 6, rows: "auto", min_rows: gridMinRows(this.minimumHeight()) };
+  }
+  // The lowest the card goes when held to a height: its border and padding, the status, one line of notices, the
+  // buttons, and in the picture layout the footer. Whether a picture is found is known only from the data, so unless
+  // the configuration turns the picture off, the minimum is the picture layout's, the taller.
+  minimumHeight() {
+    const notices2 = 12 + 26;
+    const buttons = 12 + 44;
+    const footer = 12 + 16;
+    const ring = 92;
+    const picture = 96;
+    return 2 + 28 + notices2 + buttons + (this.config?.show_image === false ? ring : picture + footer);
   }
   /** "Yesterday" and a day-old error age on their own, so the card redraws itself while it is on the page. */
   connectedCallback() {
@@ -1444,6 +1645,9 @@ var MowerStatusCard = class extends i4 {
   disconnectedCallback() {
     super.disconnectedCallback();
     clearInterval(this.ticker);
+  }
+  heightStyle() {
+    return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
   }
   shouldUpdate(changed) {
     const previous = changed.get("hass");
@@ -1493,13 +1697,16 @@ var MowerStatusCard = class extends i4 {
     }
     const mower = this.hass.states[this.config.entity];
     if (!mower) {
-      return b2`<ha-card><div class="message">${this.text("common.no_entity", { entity: this.config.entity })}</div></ha-card>`;
+      return b2`<ha-card style=${this.heightStyle()}>
+                <div class="message">${this.text("common.no_entity", { entity: this.config.entity })}</div>
+            </ha-card>`;
     }
     const unavailable = this.activity === "unavailable";
     return b2`
-            <ha-card class=${unavailable ? "unavailable" : ""} lang=${this.language()}>
-                ${this.picture ? this.pictureLayout(mower) : this.gaugeLayout(mower)} ${this.chips()} ${this.buttons(mower)}
-                ${this.picture ? this.footer() : A}
+            <ha-card class=${unavailable ? "unavailable" : ""} style=${this.heightStyle()} lang=${this.language()}>
+                ${this.picture ? this.pictureLayout(mower) : this.gaugeLayout(mower)}
+                <div class="notices">${this.chips()}</div>
+                ${this.buttons(mower)} ${this.picture ? this.footer() : A}
             </ha-card>
         `;
   }
@@ -2006,431 +2213,460 @@ var MowerStatusCard = class extends i4 {
     return this.hass?.locale?.language ?? this.hass?.language ?? browserLanguage();
   }
   static get styles() {
-    return i`
-            ha-card {
-                container-type: inline-size;
-                padding: 14px;
-                font-variant-numeric: tabular-nums;
-            }
-
-            button {
-                font: inherit;
-                color: inherit;
-                background: none;
-                border: 0;
-                padding: 0;
-                cursor: pointer;
-                text-align: inherit;
-            }
-
-            ha-icon {
-                --mdc-icon-size: 16px;
-                flex: none;
-            }
-
-            .message {
-                padding: 8px 2px;
-                color: var(--secondary-text-color);
-            }
-
-            .info {
-                min-width: 0;
-            }
-
-            .name {
-                display: block;
-                font-size: 17px;
-                font-weight: 500;
-                line-height: 1.3;
-                overflow-wrap: anywhere;
-            }
-
-            .state {
-                color: var(--secondary-text-color);
-            }
-
-            .state.mowing,
-            .big-state.mowing {
-                color: var(--success-color, #4caf50);
-            }
-
-            .state.error,
-            .big-state.error {
-                color: var(--error-color, #db4437);
-            }
-
-            /* The gauge layout. */
-            .gauge-top {
-                display: flex;
-                gap: 14px;
-                align-items: center;
-            }
-
-            .ring {
-                --size: 92px;
-                width: var(--size);
-                height: var(--size);
-                flex: none;
-                border-radius: 50%;
-                display: grid;
-                place-items: center;
-                background: conic-gradient(var(--ring-color) calc(var(--value) * 1%), var(--secondary-background-color) 0);
-            }
-
-            .ring > div {
-                width: calc(var(--size) - 16px);
-                height: calc(var(--size) - 16px);
-                border-radius: 50%;
-                background: var(--ha-card-background, var(--card-background-color));
-                display: grid;
-                place-content: center;
-                text-align: center;
-            }
-
-            .ring b {
-                display: block;
-                font-size: 20px;
-                font-weight: 500;
-            }
-
-            .ring span {
-                font-size: 11px;
-                color: var(--secondary-text-color);
-            }
-
-            .ring ha-icon {
-                --mdc-icon-size: 32px;
-                color: var(--secondary-text-color);
-            }
-
-            .lines {
-                margin-top: 6px;
-                font-size: 13px;
-            }
-
-            .lines div {
-                display: flex;
-                gap: 6px;
-                align-items: flex-start;
-            }
-
-            .when {
-                display: inline-block;
-            }
-
-            .whole {
-                white-space: nowrap;
-            }
-
-            .lines ha-icon,
-            .muted {
-                color: var(--secondary-text-color);
-            }
-
-            /* The picture layout. */
-            .picture-top {
-                display: grid;
-                grid-template-columns: 120px minmax(0, 1fr);
-                gap: 12px;
-                align-items: center;
-            }
-
-            .picture {
-                width: 120px;
-                height: 96px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-
-            /* Mammotion's model pictures have transparent margins of their own, so they fill a framed box. A cut-out of the
-               mower's own gets the same box, with room around it. */
-            .picture.model,
-            .picture.framed {
-                border-radius: 10px;
-                overflow: hidden;
-                background: radial-gradient(circle at 50% 60%, var(--divider-color), var(--secondary-background-color));
-            }
-
-            .picture.model img {
-                width: 128px;
-                margin-top: 8px;
-            }
-
-            /* Any other picture is shown whole, with no frame, as it may well have a background of its own. The rounded
-               corners are the picture's own, and it sits in the middle of its box. */
-            .picture.own img {
-                max-width: 100%;
-                max-height: 100%;
-                border-radius: 10px;
-            }
-
-            .picture.framed img {
-                max-width: 100px;
-                max-height: 76px;
-                border-radius: 0;
-            }
-
-            .unavailable .picture img {
-                filter: grayscale(1) brightness(0.75);
-            }
-
-            /* A long state breaks where the language hyphenates it, never at any letter. */
-            .big-state {
-                font-size: 22px;
-                font-weight: 500;
-                line-height: 1.2;
-                hyphens: auto;
-                overflow-wrap: break-word;
-            }
-
-            .sub {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 4px 12px;
-                margin-top: 4px;
-                font-size: 13px;
-            }
-
-            .sub span {
-                display: flex;
-                align-items: center;
-                gap: 4px;
-            }
-
-            /* An upright battery is drawn 4 px inside its 16 px icon, and with its charging bolt 1 px, so the drawn battery is
-               pulled into line with the texts under it, about 5 px from its number. */
-            .sub ha-icon.battery {
-                margin: 0 -3px 0 -4px;
-            }
-
-            .sub ha-icon.battery.charging {
-                margin: 0 0 0 -1px;
-            }
-
-            .bar {
-                height: 6px;
-                margin-top: 8px;
-                border-radius: 3px;
-                overflow: hidden;
-                background: var(--secondary-background-color);
-            }
-
-            .bar i {
-                display: block;
-                height: 100%;
-                border-radius: 3px;
-                background: var(--primary-color);
-            }
-
-            .bar.mowing i {
-                background: var(--success-color, #4caf50);
-            }
-
-            .below {
-                margin-top: 4px;
-                font-size: 12px;
-                color: var(--secondary-text-color);
-            }
-
-            /* The name takes the room the distance leaves, so a long one, such as a device's serial number, wraps rather than
-               the distance. */
-            .footer-name {
-                flex: 1 1 0;
-                min-width: 0;
-                overflow-wrap: anywhere;
-            }
-
-            .footer {
-                display: flex;
-                gap: 8px;
-                margin-top: 12px;
-                font-size: 12px;
-                color: var(--secondary-text-color);
-            }
-
-            /* Notices. */
-            .chips {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 6px;
-                margin-top: 12px;
-            }
-
-            .chip {
-                display: flex;
-                align-items: center;
-                gap: 5px;
-                padding: 4px 10px;
-                border: 1px solid transparent;
-                border-radius: 999px;
-                font-size: 12px;
-                color: var(--notice);
-                background: color-mix(in srgb, var(--notice) 18%, transparent);
-            }
-
-            .chip.selected {
-                border-color: currentColor;
-            }
-
-            .chip.red,
-            .detail.red {
-                --notice: var(--error-color, #db4437);
-            }
-
-            .chip.amber,
-            .detail.amber {
-                --notice: var(--warning-color, #ffa600);
-            }
-
-            .chip.blue,
-            .detail.blue {
-                --notice: var(--info-color, #039be5);
-            }
-
-            /* An integration's error can come in steps, one per line. */
-            .detail {
-                display: flex;
-                flex-wrap: wrap;
-                align-items: baseline;
-                gap: 6px 12px;
-                white-space: pre-line;
-                margin-top: 8px;
-                padding: 9px 11px;
-                border-radius: 8px;
-                font-size: 13px;
-                background: color-mix(in srgb, var(--notice) 15%, transparent);
-                overflow-wrap: anywhere;
-            }
-
-            /* Beside a text short enough to share its line, else on a line of its own, at the right either way. */
-            .dismiss {
-                margin-left: auto;
-                padding: 2px 10px;
-                border: 1px solid currentColor;
-                border-radius: 999px;
-                font-size: 12px;
-                color: var(--notice);
-            }
-
-            /* Buttons. */
-            .buttons {
-                display: flex;
-                gap: 8px;
-                margin-top: 12px;
-            }
-
-            .button {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                min-height: 44px;
-                padding: 0 12px;
-                border-radius: 10px;
-                background: var(--secondary-background-color);
-            }
-
-            .button ha-icon {
-                --mdc-icon-size: 20px;
-            }
-
-            .button.main {
-                flex: 1;
-                min-width: 0;
-                background: var(--primary-color);
-                color: var(--text-primary-color, #fff);
-                font-weight: 500;
-            }
-
-            .button.main.pause {
-                background: var(--success-color, #4caf50);
-            }
-
-            .button.icon {
-                width: 46px;
-                padding: 0;
-            }
-
-            .button:disabled {
-                opacity: 0.35;
-                cursor: default;
-            }
-
-            /* A narrow card: smaller ring and picture, so the texts keep their room, and the main button on a row of its own. */
-            @container (max-width: 300px) {
-                .buttons {
-                    flex-wrap: wrap;
+    return [
+      i`
+                /* A column, so that with a height of its own the mower's status, the buttons and the footer stay put and the
+               notices between them scroll. */
+                ha-card {
+                    box-sizing: border-box;
+                    display: flex;
+                    flex-direction: column;
+                    overflow: hidden;
+                    container-type: inline-size;
+                    padding: 14px;
+                    font-variant-numeric: tabular-nums;
                 }
 
-                .button.main {
-                    flex-basis: 100%;
+                button {
+                    font: inherit;
+                    color: inherit;
+                    background: none;
+                    border: 0;
+                    padding: 0;
+                    cursor: pointer;
+                    text-align: inherit;
                 }
 
-                .button.icon {
-                    flex: 1;
+                ha-icon {
+                    --mdc-icon-size: 16px;
+                    flex: none;
+                }
+
+                .message {
+                    padding: 8px 2px;
+                    color: var(--secondary-text-color);
+                }
+
+                .info {
+                    min-width: 0;
+                }
+
+                .name {
+                    display: block;
+                    font-size: 17px;
+                    font-weight: 500;
+                    line-height: 1.3;
+                    overflow-wrap: anywhere;
+                }
+
+                .state {
+                    color: var(--secondary-text-color);
+                }
+
+                .state.mowing,
+                .big-state.mowing {
+                    color: var(--success-color, #4caf50);
+                }
+
+                .state.error,
+                .big-state.error {
+                    color: var(--error-color, #db4437);
+                }
+
+                /* The gauge layout. */
+                .gauge-top {
+                    flex: none;
+                    display: flex;
+                    gap: 14px;
+                    align-items: center;
                 }
 
                 .ring {
-                    --size: 76px;
+                    --size: 92px;
+                    width: var(--size);
+                    height: var(--size);
+                    flex: none;
+                    border-radius: 50%;
+                    display: grid;
+                    place-items: center;
+                    background: conic-gradient(var(--ring-color) calc(var(--value) * 1%), var(--secondary-background-color) 0);
+                }
+
+                .ring > div {
+                    width: calc(var(--size) - 16px);
+                    height: calc(var(--size) - 16px);
+                    border-radius: 50%;
+                    background: var(--ha-card-background, var(--card-background-color));
+                    display: grid;
+                    place-content: center;
+                    text-align: center;
                 }
 
                 .ring b {
-                    font-size: 17px;
+                    display: block;
+                    font-size: 20px;
+                    font-weight: 500;
                 }
 
+                .ring span {
+                    font-size: 11px;
+                    color: var(--secondary-text-color);
+                }
+
+                .ring ha-icon {
+                    --mdc-icon-size: 32px;
+                    color: var(--secondary-text-color);
+                }
+
+                .lines {
+                    margin-top: 6px;
+                    font-size: 13px;
+                }
+
+                .lines div {
+                    display: flex;
+                    gap: 6px;
+                    align-items: flex-start;
+                }
+
+                .when {
+                    display: inline-block;
+                }
+
+                .whole {
+                    white-space: nowrap;
+                }
+
+                .lines ha-icon,
+                .muted {
+                    color: var(--secondary-text-color);
+                }
+
+                /* The picture layout. */
                 .picture-top {
-                    grid-template-columns: 72px minmax(0, 1fr);
-                    gap: 10px;
+                    flex: none;
+                    display: grid;
+                    grid-template-columns: 120px minmax(0, 1fr);
+                    gap: 12px;
+                    align-items: center;
                 }
 
                 .picture {
-                    width: 72px;
-                    height: 64px;
+                    width: 120px;
+                    height: 96px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                /* Mammotion's model pictures have transparent margins of their own, so they fill a framed box. A cut-out of the
+               mower's own gets the same box, with room around it. */
+                .picture.model,
+                .picture.framed {
+                    border-radius: 10px;
+                    overflow: hidden;
+                    background: radial-gradient(circle at 50% 60%, var(--divider-color), var(--secondary-background-color));
                 }
 
                 .picture.model img {
-                    width: 80px;
+                    width: 128px;
+                    margin-top: 8px;
+                }
+
+                /* Any other picture is shown whole, with no frame, as it may well have a background of its own. The rounded
+               corners are the picture's own, and it sits in the middle of its box. */
+                .picture.own img {
+                    max-width: 100%;
+                    max-height: 100%;
+                    border-radius: 10px;
                 }
 
                 .picture.framed img {
-                    max-width: 60px;
-                    max-height: 52px;
+                    max-width: 100px;
+                    max-height: 76px;
+                    border-radius: 0;
                 }
 
+                .unavailable .picture img {
+                    filter: grayscale(1) brightness(0.75);
+                }
+
+                /* A long state breaks where the language hyphenates it, never at any letter. */
                 .big-state {
-                    font-size: 17px;
-                }
-            }
-
-            /* A very narrow card, a half of a phone's section: the ring or the picture on top, the texts below it at full width. */
-            @container (max-width: 220px) {
-                .gauge-top {
-                    flex-direction: column;
-                    align-items: flex-start;
-                    gap: 10px;
+                    font-size: 22px;
+                    font-weight: 500;
+                    line-height: 1.2;
+                    hyphens: auto;
+                    overflow-wrap: break-word;
                 }
 
-                .picture-top {
-                    grid-template-columns: minmax(0, 1fr);
+                .sub {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 4px 12px;
+                    margin-top: 4px;
+                    font-size: 13px;
                 }
 
-                /* Too narrow for the name and the distance side by side without breaking the name inside its words. */
+                .sub span {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+
+                /* An upright battery is drawn 4 px inside its 16 px icon, and with its charging bolt 1 px, so the drawn battery is
+               pulled into line with the texts under it, about 5 px from its number. */
+                .sub ha-icon.battery {
+                    margin: 0 -3px 0 -4px;
+                }
+
+                .sub ha-icon.battery.charging {
+                    margin: 0 0 0 -1px;
+                }
+
+                .bar {
+                    height: 6px;
+                    margin-top: 8px;
+                    border-radius: 3px;
+                    overflow: hidden;
+                    background: var(--secondary-background-color);
+                }
+
+                .bar i {
+                    display: block;
+                    height: 100%;
+                    border-radius: 3px;
+                    background: var(--primary-color);
+                }
+
+                .bar.mowing i {
+                    background: var(--success-color, #4caf50);
+                }
+
+                .below {
+                    margin-top: 4px;
+                    font-size: 12px;
+                    color: var(--secondary-text-color);
+                }
+
+                /* The name takes the room the distance leaves, so a long one, such as a device's serial number, wraps rather than
+               the distance. */
+                .footer-name {
+                    flex: 1 1 0;
+                    min-width: 0;
+                    overflow-wrap: anywhere;
+                }
+
                 .footer {
-                    flex-direction: column;
-                    gap: 2px;
+                    flex: none;
+                    display: flex;
+                    gap: 8px;
+                    margin-top: 12px;
+                    font-size: 12px;
+                    color: var(--secondary-text-color);
                 }
 
-                .button.main ha-icon {
-                    display: none;
+                /*
+                 * Notices. The padding, taken back by the margin, keeps a focused chip's or button's outline clear of the
+                 * scrolling sides and bottom. None at the top, where it would lie over the picture or ring above and take its taps.
+                 */
+                .notices {
+                    flex: 1 1 auto;
+                    min-height: 0;
+                    overflow-y: auto;
+                    overscroll-behavior: contain;
+                    scrollbar-width: thin;
+                    margin: 0 -4px -4px;
+                    padding: 0 4px 4px;
                 }
-            }
-        `;
+
+                .chips {
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 6px;
+                    margin-top: 12px;
+                }
+
+                .chip {
+                    display: flex;
+                    align-items: center;
+                    gap: 5px;
+                    padding: 4px 10px;
+                    border: 1px solid transparent;
+                    border-radius: 999px;
+                    font-size: 12px;
+                    color: var(--notice);
+                    background: color-mix(in srgb, var(--notice) 18%, transparent);
+                }
+
+                .chip.selected {
+                    border-color: currentColor;
+                }
+
+                .chip.red,
+                .detail.red {
+                    --notice: var(--error-color, #db4437);
+                }
+
+                .chip.amber,
+                .detail.amber {
+                    --notice: var(--warning-color, #ffa600);
+                }
+
+                .chip.blue,
+                .detail.blue {
+                    --notice: var(--info-color, #039be5);
+                }
+
+                /* An integration's error can come in steps, one per line. */
+                .detail {
+                    display: flex;
+                    flex-wrap: wrap;
+                    align-items: baseline;
+                    gap: 6px 12px;
+                    white-space: pre-line;
+                    margin-top: 8px;
+                    padding: 9px 11px;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    background: color-mix(in srgb, var(--notice) 15%, transparent);
+                    overflow-wrap: anywhere;
+                }
+
+                /* Beside a text short enough to share its line, else on a line of its own, at the right either way. */
+                .dismiss {
+                    margin-left: auto;
+                    padding: 2px 10px;
+                    border: 1px solid currentColor;
+                    border-radius: 999px;
+                    font-size: 12px;
+                    color: var(--notice);
+                }
+
+                /* Buttons. */
+                .buttons {
+                    flex: none;
+                    display: flex;
+                    gap: 8px;
+                    margin-top: 12px;
+                }
+
+                .button {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 8px;
+                    min-height: 44px;
+                    padding: 0 12px;
+                    border-radius: 10px;
+                    background: var(--secondary-background-color);
+                }
+
+                .button ha-icon {
+                    --mdc-icon-size: 20px;
+                }
+
+                .button.main {
+                    flex: 1;
+                    min-width: 0;
+                    background: var(--primary-color);
+                    color: var(--text-primary-color, #fff);
+                    font-weight: 500;
+                }
+
+                .button.main.pause {
+                    background: var(--success-color, #4caf50);
+                }
+
+                .button.icon {
+                    width: 46px;
+                    padding: 0;
+                }
+
+                .button:disabled {
+                    opacity: 0.35;
+                    cursor: default;
+                }
+
+                /* A narrow card: smaller ring and picture, so the texts keep their room, and the main button on a row of its own. */
+                @container (max-width: 300px) {
+                    .buttons {
+                        flex-wrap: wrap;
+                    }
+
+                    .button.main {
+                        flex-basis: 100%;
+                    }
+
+                    .button.icon {
+                        flex: 1;
+                    }
+
+                    .ring {
+                        --size: 76px;
+                    }
+
+                    .ring b {
+                        font-size: 17px;
+                    }
+
+                    .picture-top {
+                        grid-template-columns: 72px minmax(0, 1fr);
+                        gap: 10px;
+                    }
+
+                    .picture {
+                        width: 72px;
+                        height: 64px;
+                    }
+
+                    .picture.model img {
+                        width: 80px;
+                    }
+
+                    .picture.framed img {
+                        max-width: 60px;
+                        max-height: 52px;
+                    }
+
+                    .big-state {
+                        font-size: 17px;
+                    }
+                }
+
+                /* A very narrow card, a half of a phone's section: the ring or the picture on top, the texts below it at full width. */
+                @container (max-width: 220px) {
+                    .gauge-top {
+                        flex-direction: column;
+                        align-items: flex-start;
+                        gap: 10px;
+                    }
+
+                    .picture-top {
+                        grid-template-columns: minmax(0, 1fr);
+                    }
+
+                    /* Too narrow for the name and the distance side by side without breaking the name inside its words. */
+                    .footer {
+                        flex-direction: column;
+                        gap: 2px;
+                    }
+
+                    .button.main ha-icon {
+                        display: none;
+                    }
+                }
+            `,
+      fadeStyles
+    ];
   }
 };
 __decorateClass([
   n4({ attribute: false })
 ], MowerStatusCard.prototype, "hass", 2);
+__decorateClass([
+  n4({ attribute: false })
+], MowerStatusCard.prototype, "layout", 2);
 __decorateClass([
   r5()
 ], MowerStatusCard.prototype, "config", 2);

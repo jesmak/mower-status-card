@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { HomeAssistant } from "../src/hass";
+import { browserLanguage, translate } from "../src/localize/localize";
 import "../src/mower-status-card";
 import type { MowerStatusCard } from "../src/mower-status-card";
 import type { MowerStatusCardConfig } from "../src/types";
 import { NOW, mockHass } from "./fixtures";
 
-async function card(state: HomeAssistant, config: Partial<MowerStatusCardConfig> = {}): Promise<MowerStatusCard> {
+async function card(state: HomeAssistant, config: Partial<MowerStatusCardConfig> = {}, layout?: string): Promise<MowerStatusCard> {
     const element = document.createElement("mower-status-card");
     element.setConfig({
         type: "custom:mower-status-card",
@@ -15,6 +16,7 @@ async function card(state: HomeAssistant, config: Partial<MowerStatusCardConfig>
         ...config,
     } as MowerStatusCardConfig);
     element.hass = state;
+    element.layout = layout;
     document.body.append(element);
     await element.updateComplete;
     return element;
@@ -48,6 +50,100 @@ describe("mower-status-card", () => {
     it("refuses a configuration without a lawn mower", () => {
         const element = document.createElement("mower-status-card");
         expect(() => element.setConfig({ type: "custom:mower-status-card", entity: "sensor.matti_battery" })).toThrow();
+    });
+
+    it("refuses a height that isn't a positive number of pixels, and an unknown height mode, with an error about the height", () => {
+        const element = document.createElement("mower-status-card");
+        const config = (extra: Record<string, unknown>) =>
+            ({ type: "custom:mower-status-card", entity: "lawn_mower.matti", ...extra }) as never;
+        const error = translate(browserLanguage(), "common.invalid_height");
+        expect(error).toMatch(/^Invalid height\./);
+        for (const value of ["300px", 0, -10]) {
+            expect(() => element.setConfig(config({ max_height: value }))).toThrow(error);
+            expect(() => element.setConfig(config({ height: value }))).toThrow(error);
+        }
+        expect(() => element.setConfig(config({ height_mode: "tall" }))).toThrow(error);
+        // Left empty in YAML, each is unset.
+        expect(() => element.setConfig(config({ height_mode: null, height: null, max_height: null }))).not.toThrow();
+    });
+
+    it.each([
+        ["its content", undefined, {}, ""],
+        ["a fixed height", undefined, { height_mode: "fixed" as const, height: 240, max_height: 400 }, "height: 240px"],
+        ["a maximum height", undefined, { max_height: 400 }, "max-height: 400px"],
+        ["grid rows in a sections view", "grid", { height: 240, grid_options: { rows: 6 } }, "height: 100%"],
+        ["the mode when the grid rows are automatic", "grid", { height: 240, grid_options: { rows: "auto" } }, "height: 240px"],
+    ])("sizes itself by %s", async (_name, layout, extra, style) => {
+        const element = await card(mockHass(), extra, layout);
+        expect(root(element).querySelector("ha-card")!.getAttribute("style") ?? "").toBe(style);
+    });
+
+    it.each([
+        // A picture of its own, so no search for a model picture is left running into the next test.
+        ["the picture layout's, as a picture may be found", { image: "/local/mower.png" }, 248],
+        ["the gauge layout's, with the picture turned off", { show_image: false }, 216],
+    ])("is never held lower than its status, one line of notices and its buttons, by %s", async (_name, extra, minimum) => {
+        const element = await card(mockHass(), { show_image: undefined, ...extra, height_mode: "fixed", height: 100 });
+        expect(element.getGridOptions().min_rows).toBe(4);
+        expect(root(element).querySelector("ha-card")!.getAttribute("style")).toBe(`height: ${minimum}px`);
+    });
+
+    /** The card's notices, taller than the room they have, as happy-dom lays nothing out. */
+    async function overflowing(element: MowerStatusCard): Promise<HTMLElement> {
+        const notices = root(element).querySelector(".notices") as HTMLElement;
+        Object.defineProperty(notices, "scrollHeight", { value: 600, configurable: true });
+        Object.defineProperty(notices, "clientHeight", { value: 200, configurable: true });
+        element.requestUpdate();
+        await element.updateComplete;
+        return notices;
+    }
+
+    const RAIN = { "binary_sensor.matti_rain": { state: "on" } };
+
+    it.each([
+        ["held to a height", undefined, { height: 300 }, ["fade-bottom"]],
+        ["held up to a limit", undefined, { max_height: 300 }, ["fade-bottom"]],
+        ["held by rows in a sections view", "grid", { grid_options: { rows: 4 } }, ["fade-bottom"]],
+        [
+            "held to a height with automatic rows in a sections view",
+            "grid",
+            { height: 300, grid_options: { rows: "auto" } },
+            ["fade-bottom"],
+        ],
+        ["held by the older layout options' rows in a sections view", "grid", { layout_options: { grid_rows: 4 } }, ["fade-bottom"]],
+        ["never in auto", undefined, {}, []],
+        ["never in auto with automatic rows in a sections view", "grid", { grid_options: { rows: "auto" } }, []],
+        ["never by grid rows outside a sections view", undefined, { grid_options: { rows: 4 } }, []],
+    ])("fades the bottom edge of the notices that run past it when %s", async (_name, layout, extra, expected) => {
+        const notices = await overflowing(await card(mockHass(RAIN), extra, layout));
+        expect(["fade-top", "fade-bottom"].filter((name) => notices.classList.contains(name))).toEqual(expected);
+    });
+
+    it("lets go of the notices' fade when the card goes from held to auto, and fades them again when held again", async () => {
+        const element = await card(mockHass(RAIN), { height: 300 });
+        const notices = await overflowing(element);
+        expect([...notices.classList].filter((name) => name.startsWith("fade"))).toEqual(["fades", "fade-bottom"]);
+        const config = { type: "custom:mower-status-card", entity: "lawn_mower.matti", show_image: false };
+        element.setConfig(config as MowerStatusCardConfig);
+        await element.updateComplete;
+        expect([...notices.classList].filter((name) => name.startsWith("fade"))).toEqual([]);
+        element.setConfig({ ...config, height: 300 } as MowerStatusCardConfig);
+        await element.updateComplete;
+        expect([...notices.classList].filter((name) => name.startsWith("fade"))).toEqual(["fades", "fade-bottom"]);
+    });
+
+    it.each([
+        ["gauge", {}, ["gauge-top", "notices", "buttons"]],
+        ["picture", { show_image: true, image: "/local/mower.png" }, ["picture-top", "notices", "buttons", "footer"]],
+    ])("puts the notices between the status and the buttons, in the %s layout", async (_name, extra, parts) => {
+        const element = await card(mockHass({ "binary_sensor.matti_rain": { state: "on" } }), {
+            ...extra,
+            height_mode: "fixed",
+            height: 300,
+        });
+        const haCard = root(element).querySelector("ha-card")!;
+        expect([...haCard.children].map((child) => child.classList[0])).toEqual(parts);
+        expect(haCard.querySelector(".notices .chips")).not.toBeNull();
     });
 
     it("offers a new task at the dock, with cancel and dock greyed", async () => {

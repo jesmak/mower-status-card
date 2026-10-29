@@ -1,4 +1,5 @@
 import type { LovelaceCardConfig } from "./hass";
+import type { HeightConfig } from "./height";
 
 /** The mower's companion entities the card can use, each found on its own or chosen in the editor. */
 export const SLOTS = [
@@ -27,7 +28,7 @@ export type Slot = (typeof SLOTS)[number];
 /** Written in place of an entity to turn a slot off, so what was found isn't used. */
 export const NONE = "none";
 
-export interface MowerStatusCardConfig extends LovelaceCardConfig {
+export interface MowerStatusCardConfig extends LovelaceCardConfig, HeightConfig {
     /** The lawn_mower entity. */
     entity: string;
     /** Replaces the device's name. */
