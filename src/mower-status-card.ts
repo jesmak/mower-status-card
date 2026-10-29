@@ -377,7 +377,13 @@ export class MowerStatusCard extends LitElement {
                                   >`
                                 : nothing
                         }
-                        ${left ? html`<span><ha-icon icon="mdi:timer-sand"></ha-icon>${this.text("common.time_left", { time: left })}</span>` : nothing}
+                        ${
+                            left
+                                ? html`<span
+                                      ><ha-icon icon="mdi:timer-sand"></ha-icon>${this.text("common.time_left", { time: left })}</span
+                                  >`
+                                : nothing
+                        }
                     </div>
                     ${
                         progress !== null
@@ -801,9 +807,8 @@ export class MowerStatusCard extends LitElement {
      */
     private whenMarkup(time: number): TemplateResult {
         const { day, time: clock } = this.whenParts(time);
-        return html`<span class="when"
-            >${this.markup("when.format", { day: html`<span class="whole">${day}</span>`, time: html`<span class="whole">${clock}</span>` })}</span
-        >`;
+        const parts = { day: html`<span class="whole">${day}</span>`, time: html`<span class="whole">${clock}</span>` };
+        return html`<span class="when">${this.markup("when.format", parts)}</span>`;
     }
 
     /** "46 %" in Finnish, "46%" in English: each language's own way, as Home Assistant writes the battery. */

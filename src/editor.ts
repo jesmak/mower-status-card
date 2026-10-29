@@ -106,7 +106,8 @@ export class MowerStatusCardEditor extends LitElement {
                     .data=${chosen}
                     .schema=${SLOTS_SCHEMA}
                     .computeLabel=${(entry: SchemaEntry) => this.text(`slot.${entry.name}`)}
-                    @value-changed=${(event: CustomEvent<{ value: Partial<Record<Slot, string>> }>) => this.slotsChanged(found, event.detail.value)}
+                    @value-changed=${(event: CustomEvent<{ value: Partial<Record<Slot, string>> }>) =>
+                        this.slotsChanged(found, event.detail.value)}
                 ></ha-form>
             </ha-expansion-panel>
         `;

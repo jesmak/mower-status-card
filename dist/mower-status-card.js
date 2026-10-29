@@ -1794,7 +1794,9 @@ var MowerStatusCard = class extends i4 {
                                       ></ha-icon
                                       >${this.format("battery")}${this.chargingNote()}</span
                                   >` : A}
-                        ${left ? b2`<span><ha-icon icon="mdi:timer-sand"></ha-icon>${this.text("common.time_left", { time: left })}</span>` : A}
+                        ${left ? b2`<span
+                                      ><ha-icon icon="mdi:timer-sand"></ha-icon>${this.text("common.time_left", { time: left })}</span
+                                  >` : A}
                     </div>
                     ${progress !== null ? b2`<div class="bar ${this.activity}"><i style="width: ${Math.min(100, Math.max(0, progress))}%"></i></div>` : A}
                     ${below ? b2`<div class="below">${below}</div>` : A}
@@ -2115,9 +2117,8 @@ var MowerStatusCard = class extends i4 {
    */
   whenMarkup(time) {
     const { day, time: clock } = this.whenParts(time);
-    return b2`<span class="when"
-            >${this.markup("when.format", { day: b2`<span class="whole">${day}</span>`, time: b2`<span class="whole">${clock}</span>` })}</span
-        >`;
+    const parts = { day: b2`<span class="whole">${day}</span>`, time: b2`<span class="whole">${clock}</span>` };
+    return b2`<span class="when">${this.markup("when.format", parts)}</span>`;
   }
   /** "46 %" in Finnish, "46%" in English: each language's own way, as Home Assistant writes the battery. */
   percent(value) {
