@@ -17,6 +17,8 @@ import {
     FEATURE_STOP,
     HISTORY_DAYS,
     MAMMOTION_ASSETS,
+    ROW_GAP_PX,
+    ROW_PX,
     TICK_MS,
 } from "./const";
 import "./editor";
@@ -93,6 +95,15 @@ interface Action {
     confirmation?: { text: string };
 }
 
+/**
+ * The least height a held card needs, measured live with every text of the status on one line: its border and padding,
+ * the status, one line of notices, the buttons, and under a picture the name. By the room its content has, as its own
+ * container queries lay it out: wider than 300 px, up to 300 px (the buttons on two rows) and up to 220 px (the picture
+ * or ring above the texts too).
+ */
+const HELD_MINIMUM = { picture: { wide: 246, narrow: 275, veryNarrow: 351 }, gauge: { wide: 216, narrow: 253, veryNarrow: 339 } };
+type WidthClass = keyof typeof HELD_MINIMUM.picture;
+
 @customElement("mower-status-card")
 export class MowerStatusCard extends LitElement {
     @property({ attribute: false }) public hass?: HomeAssistant;
@@ -123,6 +134,14 @@ export class MowerStatusCard extends LitElement {
     private pictureKey?: string;
     private historyKey?: string;
     private ticker?: ReturnType<typeof setInterval>;
+    /** On automatic rows in a sections view, the height that ends the card on a whole row; 0 when it isn't set. */
+    @state() private filled = 0;
+    private frame?: number;
+    /** The layout the card's measured width gives it, as its container queries switch; unknown before it is measured. */
+    @state() private widthClass?: WidthClass;
+    private readonly resizes = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => this.fillRowsSoon());
+    /** The ha-card the observer follows. The host is inline, so its own box never changes size for an observer. */
+    private observed?: Element;
 
     constructor() {
         super();
@@ -155,22 +174,49 @@ export class MowerStatusCard extends LitElement {
 
     /**
      * In a sections view the card takes a whole section by default and is never narrower than half of one, nor lower
-     * than its minimum.
+     * than its minimum. Home Assistant holds rows set in the layout tab to that minimum.
      */
     public getGridOptions(): Record<string, unknown> {
         return { columns: 12, min_columns: 6, rows: "auto", min_rows: gridMinRows(this.minimumHeight()) };
     }
 
-    // The lowest the card goes when held to a height: its border and padding, the status, one line of notices, the
-    // buttons, and in the picture layout the footer. Whether a picture is found is known only from the data, so unless
-    // the configuration turns the picture off, the minimum is the picture layout's, the taller.
+    /**
+     * The lowest the card goes when held to a height: the least it needs at the narrowest its columns can be, or at the
+     * width it is measured to have, whichever is more. The columns alone are what Home Assistant has before the card is
+     * drawn: a whole section counts as the narrow layout, 11 columns or fewer as the very narrow one. The width covers
+     * what they don't promise, such as a card inside another card, whose config has no columns of its own. Whether a
+     * picture is found is known only from the data, so unless the configuration turns the picture off, the minimum is
+     * the picture layout's, the taller.
+     */
     private minimumHeight(): number {
-        const notices = 12 + 26;
-        const buttons = 12 + 44;
-        const footer = 12 + 16;
-        const ring = 92;
-        const picture = 96;
-        return 2 + 28 + notices + buttons + (this.config?.show_image === false ? ring : picture + footer);
+        const sizes = this.config?.show_image === false ? HELD_MINIMUM.gauge : HELD_MINIMUM.picture;
+        const byColumns = sizes[this.columns() <= 11 ? "veryNarrow" : "narrow"];
+        return Math.max(byColumns, this.widthClass ? sizes[this.widthClass] : 0);
+    }
+
+    /**
+     * Keeps the layout the card's content width gives it, read in the frame that measures its rows, never in the
+     * observer's callback: a change there would resize the card while the observer is still running. A hidden card,
+     * with no width, keeps the last.
+     */
+    private measureWidth(): void {
+        const card = this.renderRoot.querySelector<HTMLElement>("ha-card");
+        if (!card?.clientWidth) return;
+        const style = getComputedStyle(card);
+        const width = card.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
+        const widthClass: WidthClass = width <= 220 ? "veryNarrow" : width <= 300 ? "narrow" : "wide";
+        if (widthClass !== this.widthClass) this.widthClass = widthClass;
+    }
+
+    /** The columns set in the layout tab, in either form Home Assistant has saved them, or a whole section. */
+    private columns(): number {
+        const config = this.config as { grid_options?: { columns?: unknown }; layout_options?: { grid_columns?: unknown } } | undefined;
+        const columns = config?.grid_options
+            ? config.grid_options.columns
+            : typeof config?.layout_options?.grid_columns === "number"
+              ? config.layout_options.grid_columns * 3
+              : undefined;
+        return typeof columns === "number" ? columns : 12;
     }
 
     /** "Yesterday" and a day-old error age on their own, so the card redraws itself while it is on the page. */
@@ -183,10 +229,71 @@ export class MowerStatusCard extends LitElement {
     public disconnectedCallback(): void {
         super.disconnectedCallback();
         clearInterval(this.ticker);
+        this.resizes?.disconnect();
+        this.observed = undefined;
+        cancelAnimationFrame(this.frame ?? 0);
+    }
+
+    protected updated(): void {
+        // The message and the mower are drawn in ha-cards of their own, so the one followed changes with them.
+        const card = this.renderRoot.querySelector("ha-card") ?? undefined;
+        if (card !== this.observed) {
+            if (this.observed) this.resizes?.unobserve(this.observed);
+            if (card) this.resizes?.observe(card);
+            this.observed = card;
+        }
+        this.fillRowsSoon();
+    }
+
+    private fillRowsSoon(): void {
+        cancelAnimationFrame(this.frame ?? 0);
+        this.frame = requestAnimationFrame(() => {
+            this.measureWidth();
+            this.fillRows();
+        });
+    }
+
+    /**
+     * On automatic rows in a sections view, the card takes the whole rows its content needs, so the cards under it stay
+     * on the rows. The content is measured to the end of the card's last part, never by the card's own height, which is
+     * at least the rows already taken. The notices take the height added, keeping the buttons and the footer at the
+     * bottom as when the card is held, so what they have grown past their own content is left out too, or a card whose
+     * notices get fewer would keep the rows it no longer needs.
+     */
+    private fillRows(): void {
+        const card = this.renderRoot.querySelector<HTMLElement>("ha-card");
+        const last = card && [...card.children].filter((part) => part.matches(".message, .buttons, .footer")).at(-1);
+        if (!card || !last || !card.clientWidth || this.layout !== "grid" || this.heightStyle()) {
+            if (this.filled) this.filled = 0;
+            return;
+        }
+        const cardStyle = getComputedStyle(card);
+        const content =
+            last.getBoundingClientRect().bottom -
+            card.getBoundingClientRect().top +
+            (parseFloat(cardStyle.paddingBottom) || 0) +
+            (parseFloat(cardStyle.borderBottomWidth) || 0);
+        let grown = 0;
+        const notices = this.renderRoot.querySelector<HTMLElement>(".notices");
+        if (notices) {
+            const box = notices.getBoundingClientRect();
+            const style = getComputedStyle(notices);
+            const lastNotice = notices.lastElementChild;
+            const end = lastNotice
+                ? lastNotice.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(lastNotice).marginBottom) || 0)
+                : box.top + (parseFloat(style.paddingTop) || 0);
+            grown = Math.max(0, box.bottom - end - (parseFloat(style.paddingBottom) || 0));
+        }
+        const filled = gridMinRows(Math.round(content - grown)) * ROW_PX - ROW_GAP_PX;
+        if (filled !== this.filled) this.filled = filled;
     }
 
     private heightStyle(): string {
         return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
+    }
+
+    private cardStyle(): string {
+        return this.heightStyle() || (this.filled ? `min-height: ${this.filled}px` : "");
     }
 
     protected shouldUpdate(changed: PropertyValues): boolean {
@@ -253,13 +360,17 @@ export class MowerStatusCard extends LitElement {
         }
         const mower = this.hass.states[this.config.entity];
         if (!mower) {
-            return html`<ha-card style=${this.heightStyle()}>
+            return html`<ha-card style=${this.cardStyle()}>
                 <div class="message">${this.text("common.no_entity", { entity: this.config.entity })}</div>
             </ha-card>`;
         }
         const unavailable = this.activity === "unavailable";
         return html`
-            <ha-card class=${unavailable ? "unavailable" : ""} style=${this.heightStyle()} lang=${this.language()}>
+            <ha-card
+                class=${[unavailable ? "unavailable" : "", this.heightStyle() ? "held" : ""].join(" ").trim()}
+                style=${this.cardStyle()}
+                lang=${this.language()}
+            >
                 ${this.picture ? this.pictureLayout(mower) : this.gaugeLayout(mower)}
                 <div class="notices">${this.chips()}</div>
                 ${this.buttons(mower)} ${this.picture ? this.footer() : nothing}
@@ -373,14 +484,15 @@ export class MowerStatusCard extends LitElement {
                                           class="battery ${this.batteryIcon().includes("charging") ? "charging" : ""}"
                                           icon=${this.batteryIcon()}
                                       ></ha-icon
-                                      >${this.format("battery")}${this.chargingNote()}</span
+                                      ><span class="text">${this.format("battery")}${this.chargingNote()}</span></span
                                   >`
                                 : nothing
                         }
                         ${
                             left
                                 ? html`<span
-                                      ><ha-icon icon="mdi:timer-sand"></ha-icon>${this.text("common.time_left", { time: left })}</span
+                                      ><ha-icon icon="mdi:timer-sand"></ha-icon
+                                      ><span class="text">${this.text("common.time_left", { time: left })}</span></span
                                   >`
                                 : nothing
                         }
@@ -1135,7 +1247,7 @@ export class MowerStatusCard extends LitElement {
                     font-size: 13px;
                 }
 
-                .sub span {
+                .sub > span {
                     display: flex;
                     align-items: center;
                     gap: 4px;
@@ -1177,7 +1289,7 @@ export class MowerStatusCard extends LitElement {
                 }
 
                 /* The name takes the room the distance leaves, so a long one, such as a device's serial number, wraps rather than
-               the distance. */
+               the distance, or in a held card is cut short. */
                 .footer-name {
                     flex: 1 1 0;
                     min-width: 0;
@@ -1268,6 +1380,33 @@ export class MowerStatusCard extends LitElement {
                     border-radius: 999px;
                     font-size: 12px;
                     color: var(--notice);
+                }
+
+                /* Held to a height, every text of the status keeps to one line, cut short when it is longer, so the status is as
+                   tall with any texts as the minimum the card gives Home Assistant for its width. */
+                .held .name,
+                .held .state,
+                .held .lines div > span,
+                .held .big-state,
+                .held .sub .text,
+                .held .below,
+                .held .footer-name {
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                }
+
+                /* A button is as wide as its text, even as a block, so the name is held to the width it has. */
+                .held .name {
+                    max-width: 100%;
+                }
+
+                .held .sub {
+                    flex-wrap: nowrap;
+                }
+
+                .held .sub > span {
+                    min-width: 0;
                 }
 
                 /* Buttons. */
@@ -1367,6 +1506,11 @@ export class MowerStatusCard extends LitElement {
                         flex-direction: column;
                         align-items: flex-start;
                         gap: 10px;
+                    }
+
+                    /* The texts as wide as the card, so a held one is cut at its edge rather than running past it. */
+                    .gauge-top .info {
+                        align-self: stretch;
                     }
 
                     .picture-top {

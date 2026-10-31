@@ -12,6 +12,10 @@ export const HISTORY_DAYS = 10;
 /** How often the card redraws itself between state changes, so "yesterday" and a day-old error age on their own. */
 export const TICK_MS = 60_000;
 
+/** A sections view's row and the gap under it. */
+export const ROW_PX = 64;
+export const ROW_GAP_PX = 8;
+
 /** The lawn_mower entity's supported_features bits. */
 export const FEATURE_START_MOWING = 1;
 export const FEATURE_PAUSE = 2;

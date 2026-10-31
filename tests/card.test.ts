@@ -69,23 +69,403 @@ describe("mower-status-card", () => {
 
     it.each([
         ["its content", undefined, {}, ""],
-        ["a fixed height", undefined, { height_mode: "fixed" as const, height: 240, max_height: 400 }, "height: 240px"],
+        ["a fixed height", undefined, { height_mode: "fixed" as const, height: 300, max_height: 400 }, "height: 300px"],
         ["a maximum height", undefined, { max_height: 400 }, "max-height: 400px"],
-        ["grid rows in a sections view", "grid", { height: 240, grid_options: { rows: 6 } }, "height: 100%"],
-        ["the mode when the grid rows are automatic", "grid", { height: 240, grid_options: { rows: "auto" } }, "height: 240px"],
+        ["grid rows in a sections view", "grid", { height: 300, grid_options: { rows: 6 } }, "height: 100%"],
+        ["the mode when the grid rows are automatic", "grid", { height: 300, grid_options: { rows: "auto" } }, "height: 300px"],
     ])("sizes itself by %s", async (_name, layout, extra, style) => {
         const element = await card(mockHass(), extra, layout);
         expect(root(element).querySelector("ha-card")!.getAttribute("style") ?? "").toBe(style);
     });
 
-    it.each([
+    // The least the card is held to, measured live at the narrowest its columns can be: a whole section in the narrow
+    // layout, 11 columns or fewer in the very narrow one. Home Assistant holds rows set in the layout tab to the min_rows
+    // given. The columns are Home Assistant's own part of the config, which the card's config type leaves out.
+    const picture = { image: "/local/mower.png" };
+    it.each<[string, Record<string, unknown>, number, number]>([
         // A picture of its own, so no search for a model picture is left running into the next test.
-        ["the picture layout's, as a picture may be found", { image: "/local/mower.png" }, 248],
-        ["the gauge layout's, with the picture turned off", { show_image: false }, 216],
-    ])("is never held lower than its status, one line of notices and its buttons, by %s", async (_name, extra, minimum) => {
-        const element = await card(mockHass(), { show_image: undefined, ...extra, height_mode: "fixed", height: 100 });
-        expect(element.getGridOptions().min_rows).toBe(4);
-        expect(root(element).querySelector("ha-card")!.getAttribute("style")).toBe(`height: ${minimum}px`);
+        ["with a picture, a whole section", { ...picture }, 275, 5],
+        ["with a picture, 12 columns", { ...picture, grid_options: { columns: 12 } }, 275, 5],
+        ["with a picture, full width", { ...picture, grid_options: { columns: "full" } }, 275, 5],
+        ["with a picture, a section spanning two", { ...picture, grid_options: { columns: 24 } }, 275, 5],
+        ["with a picture, 11 columns", { ...picture, grid_options: { columns: 11 } }, 351, 6],
+        ["with a picture, 10 columns", { ...picture, grid_options: { columns: 10 } }, 351, 6],
+        ["with a picture, half a section", { ...picture, grid_options: { columns: 6 } }, 351, 6],
+        ["with a picture, fewer columns than the card allows", { ...picture, grid_options: { columns: 3 } }, 351, 6],
+        ["with a picture, rows set but no columns", { ...picture, grid_options: { rows: 6 }, layout_options: { grid_columns: 2 } }, 275, 5],
+        ["with a picture, a whole section in the older layout options", { ...picture, layout_options: { grid_columns: 4 } }, 275, 5],
+        ["with a picture, 9 columns in the older layout options", { ...picture, layout_options: { grid_columns: 3 } }, 351, 6],
+        ["with a picture, half a section in the older layout options", { ...picture, layout_options: { grid_columns: 2 } }, 351, 6],
+        ["with the picture turned off, a whole section", { show_image: false }, 253, 5],
+        ["with the picture turned off, 11 columns", { show_image: false, grid_options: { columns: 11 } }, 339, 6],
+        ["with the picture turned off, 10 columns", { show_image: false, grid_options: { columns: 10 } }, 339, 6],
+        ["with the picture turned off, half a section", { show_image: false, grid_options: { columns: 6 } }, 339, 6],
+    ])("is never held lower than its status and buttons with a line of notices %s", async (_name, extra, minimum, rows) => {
+        for (const [mode, style] of [
+            [{ height_mode: "fixed", height: 100 }, `height: ${minimum}px`],
+            [{ height_mode: "max", max_height: 100 }, `max-height: ${minimum}px`],
+        ] as const) {
+            const config = { show_image: undefined, ...extra, ...mode } as Partial<MowerStatusCardConfig>;
+            const element = await card(mockHass(), config);
+            expect(element.getGridOptions().min_rows).toBe(rows);
+            expect(root(element).querySelector("ha-card")!.getAttribute("style")).toBe(style);
+        }
+    });
+
+    it("counts on a picture it may find later from the data", async () => {
+        // Not Mammotion's, so no search for a model picture is left running into the next test.
+        const element = await card(mockHass({}, { platform: "demo" }), { show_image: undefined });
+        expect(root(element).querySelector(".picture")).toBeNull();
+        expect(element.getGridOptions().min_rows).toBe(5);
+        element.setConfig({ ...element["config"]!, height_mode: "fixed", height: 100 } as MowerStatusCardConfig);
+        await element.updateComplete;
+        expect(root(element).querySelector("ha-card")!.getAttribute("style")).toBe("height: 275px");
+    });
+
+    it.each<[string, string | undefined, Partial<MowerStatusCardConfig>, boolean]>([
+        ["on automatic rows", "grid", {}, false],
+        ["held by rows", "grid", { grid_options: { rows: 6 } }, true],
+        ["held to a height in a sections view", "grid", { height: 300 }, true],
+        ["held up to a limit in a sections view", "grid", { max_height: 400 }, true],
+        ["held by the older layout options' rows", "grid", { layout_options: { grid_rows: 6 } }, true],
+        ["held to a height outside a sections view", undefined, { height: 300 }, true],
+        ["held up to a limit outside a sections view", undefined, { max_height: 400 }, true],
+        ["with rows but outside a sections view", undefined, { grid_options: { rows: 6 } }, false],
+        ["in the auto mode outside a sections view", undefined, {}, false],
+    ])("is marked held only while held %s", async (_name, layout, extra, held) => {
+        const element = await card(mockHass(), extra, layout);
+        expect(root(element).querySelector("ha-card")!.classList.contains("held")).toBe(held);
+    });
+
+    /**
+     * Lays the card out as a browser would, as happy-dom lays nothing out: the card `height` tall, with 14 px of padding
+     * and a 1 px border under its last part, which ends at `end` (by default where the card's height puts it), its
+     * notices from 111 px down to `bottom` with 4 px of padding under them, and where their last element ends, or null
+     * for no notices at all.
+     */
+    function laidOut(element: MowerStatusCard, height: number, bottom: number, last: number | null, end = height - 15): HTMLElement {
+        const haCard = root(element).querySelector<HTMLElement>("ha-card")!;
+        Object.defineProperty(haCard, "clientWidth", { value: 483, configurable: true });
+        haCard.getBoundingClientRect = () => ({ top: 0, bottom: height, height }) as DOMRect;
+        const parts = [...haCard.children].filter((part) => part.matches(".message, .buttons, .footer"));
+        parts.at(-1)!.getBoundingClientRect = () => ({ bottom: end }) as DOMRect;
+        // The message shown for a missing mower has no notices.
+        const notices = root(element).querySelector<HTMLElement>(".notices");
+        if (notices) {
+            notices.getBoundingClientRect = () => ({ top: 111, bottom, height: bottom - 111 }) as DOMRect;
+            const child = last === null ? null : document.createElement("div");
+            if (child) child.getBoundingClientRect = () => ({ bottom: last }) as DOMRect;
+            Object.defineProperty(notices, "lastElementChild", { value: child, configurable: true });
+        }
+        const cardStyle = { paddingLeft: "14px", paddingRight: "14px", paddingBottom: "14px", borderBottomWidth: "1px" };
+        const noticesStyle = { paddingTop: "0px", paddingBottom: "4px", marginBottom: "0px" };
+        vi.spyOn(window, "getComputedStyle").mockImplementation(
+            (target) => (target === haCard ? cardStyle : noticesStyle) as unknown as CSSStyleDeclaration,
+        );
+        return haCard;
+    }
+
+    function fillRows(element: MowerStatusCard): void {
+        (element as unknown as { fillRows(): void }).fillRows();
+    }
+
+    // A card is 64k − 8 px tall on k rows. The notices take what is added, which the measure leaves out.
+    it.each<[string, string | undefined, Partial<MowerStatusCardConfig>, number, number, number | null, string]>([
+        ["quiet, to the next row", "grid", {}, 208, 115, null, "min-height: 248px"],
+        ["quiet, once filled, on the same row", "grid", {}, 248, 155, null, "min-height: 248px"],
+        ["with notices, to the next row", "grid", {}, 360, 267, 263, "min-height: 376px"],
+        ["with notices, once filled, on the same row", "grid", {}, 376, 283, 263, "min-height: 376px"],
+        ["a notice shut, giving back a row", "grid", {}, 376, 283, 181, "min-height: 312px"],
+        ["the notices gone, giving back two rows", "grid", {}, 376, 283, null, "min-height: 248px"],
+        ["already on a row", "grid", {}, 248, 155, 151, "min-height: 248px"],
+        // The name under a picture is the last part, so the measure ends at it.
+        [
+            "with a picture, to the next row",
+            "grid",
+            { show_image: undefined, image: "/local/mower.png" },
+            236,
+            115,
+            null,
+            "min-height: 248px",
+        ],
+        ["in the fixed mode with no height, which holds nothing", "grid", { height_mode: "fixed" }, 208, 115, null, "min-height: 248px"],
+        ["not outside a sections view", undefined, {}, 208, 115, null, ""],
+        ["not when held to a height", "grid", { height: 300 }, 300, 207, null, "height: 300px"],
+        ["not when held up to a limit", "grid", { max_height: 400 }, 208, 115, null, "max-height: 400px"],
+        ["not when held by rows", "grid", { grid_options: { rows: 6 } }, 376, 283, null, "height: 100%"],
+        ["not when held by the older layout options' rows", "grid", { layout_options: { grid_rows: 6 } }, 376, 283, null, "height: 100%"],
+    ])("ends on a whole row %s", async (_name, layout, extra, height, bottom, last, style) => {
+        const element = await card(mockHass(), extra, layout);
+        const haCard = laidOut(element, height, bottom, last);
+        // With a picture the measure ends at the name under it, which must be there for the row to say so.
+        const parts = [...haCard.children].filter((part) => part.matches(".message, .buttons, .footer"));
+        expect(parts.at(-1)!.className).toBe("image" in extra ? "footer" : "buttons");
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style") ?? "").toBe(style);
+    });
+
+    it("measures to its own last part, past anything else a theme puts after it", async () => {
+        const element = await card(mockHass(), {}, "grid");
+        const haCard = laidOut(element, 208, 115, null);
+        // A theme's card-mod element, of no height, here at the end of the card.
+        const added = document.createElement("card-mod");
+        added.getBoundingClientRect = () => ({ bottom: 0 }) as DOMRect;
+        haCard.append(added);
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+    });
+
+    // The message has no notices to take what is added, so the card's own height says nothing of what the message needs.
+    it.each<[string, string | undefined, Partial<MowerStatusCardConfig>, number, number, number, string]>([
+        ["for a missing mower, to the next row", "grid", {}, 0, 48, 33, "min-height: 56px"],
+        ["for a missing mower, once filled, on the same row", "grid", {}, 56, 56, 33, "min-height: 56px"],
+        ["for a missing mower, giving back the rows the mower filled before it", "grid", {}, 376, 376, 105, "min-height: 120px"],
+        ["for a missing mower, but not outside a sections view", undefined, {}, 0, 48, 33, ""],
+        ["for a missing mower, but not when held to a height", "grid", { height: 300 }, 0, 300, 33, "height: 300px"],
+        ["for a missing mower, but not when held up to a limit", "grid", { max_height: 400 }, 0, 48, 33, "max-height: 400px"],
+        ["for a missing mower, but not when held by rows", "grid", { grid_options: { rows: 6 } }, 0, 376, 33, "height: 100%"],
+        [
+            "for a missing mower, but not when held by the older layout options' rows",
+            "grid",
+            { layout_options: { grid_rows: 6 } },
+            0,
+            376,
+            33,
+            "height: 100%",
+        ],
+        ["for a missing mower, in the fixed mode with no height", "grid", { height_mode: "fixed" }, 0, 48, 33, "min-height: 56px"],
+    ])("ends on a whole row with only its message %s", async (_name, layout, extra, before, height, end, style) => {
+        const element = await card(mockHass({ "lawn_mower.matti": null }), extra, layout);
+        expect(root(element).querySelector(".message")).not.toBeNull();
+        (element as unknown as { filled: number }).filled = before;
+        await element.updateComplete;
+        const haCard = laidOut(element, height, 0, null, end);
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style") ?? "").toBe(style);
+    });
+
+    describe("measured when it may have changed", () => {
+        let frames = new Map<number, FrameRequestCallback>();
+        let nextFrame = 1;
+        let observers: FakeObserver[] = [];
+
+        class FakeObserver {
+            public readonly observed = new Set<Element>();
+            constructor(public readonly callback: () => void) {
+                observers.push(this);
+            }
+            observe(target: Element) {
+                this.observed.add(target);
+            }
+            unobserve(target: Element) {
+                this.observed.delete(target);
+            }
+            disconnect() {
+                this.observed.clear();
+            }
+        }
+
+        beforeEach(() => {
+            frames = new Map();
+            observers = [];
+            vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+                frames.set(nextFrame, callback);
+                return nextFrame++;
+            });
+            vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+            vi.stubGlobal("ResizeObserver", FakeObserver);
+        });
+
+        /** Runs the frames due, and those their updates ask for, until the card asks for no more. */
+        async function runFrames(element: MowerStatusCard): Promise<void> {
+            while (frames.size) {
+                const due = [...frames.values()];
+                frames.clear();
+                due.forEach((frame) => frame(0));
+                await element.updateComplete;
+            }
+        }
+
+        /** The observer of this card, which follows what is given to it. */
+        function observerOf(haCard: Element): FakeObserver {
+            return observers.find((observer) => observer.observed.has(haCard))!;
+        }
+
+        it("after it is drawn in a sections view", async () => {
+            const element = await card(mockHass(), {}, "grid");
+            const haCard = laidOut(element, 208, 115, null);
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+        });
+
+        it("after the update that puts it in a sections view", async () => {
+            const element = await card(mockHass(), {});
+            await runFrames(element);
+            const haCard = laidOut(element, 208, 115, null);
+            expect(haCard.getAttribute("style") ?? "").toBe("");
+            element.layout = "grid";
+            await element.updateComplete;
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+        });
+
+        it("after each update, such as a notice shut", async () => {
+            const element = await card(mockHass(), {}, "grid");
+            laidOut(element, 360, 267, 263);
+            await runFrames(element);
+            const haCard = laidOut(element, 376, 283, 181);
+            element.requestUpdate();
+            await element.updateComplete;
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("min-height: 312px");
+        });
+
+        it("when its ha-card changes size with nothing else changed, such as a narrower card wrapping more", async () => {
+            const element = await card(mockHass(), {}, "grid");
+            laidOut(element, 208, 115, null);
+            await runFrames(element);
+            const haCard = laidOut(element, 301, 115, null);
+            expect(frames.size).toBe(0);
+            // The host is inline, so only the ha-card's box tells of a new size.
+            const observer = observerOf(haCard);
+            expect(observer).toBeDefined();
+            expect(observer.observed.has(element)).toBe(false);
+            observer.callback();
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("min-height: 312px");
+        });
+
+        it("and lets go of its rows on the update that takes it out of a sections view", async () => {
+            const element = await card(mockHass(), {}, "grid");
+            const haCard = laidOut(element, 208, 115, null);
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+            element.layout = undefined;
+            await element.updateComplete;
+            await runFrames(element);
+            expect(haCard.getAttribute("style") ?? "").toBe("");
+        });
+
+        it("following the ha-card of the mower once the message before it is gone", async () => {
+            const element = await card(mockHass({ "lawn_mower.matti": null }), {}, "grid");
+            const message = root(element).querySelector("ha-card")!;
+            expect(observerOf(message)).toBeDefined();
+            element.hass = mockHass();
+            await element.updateComplete;
+            const mower = root(element).querySelector("ha-card")!;
+            expect(mower).not.toBe(message);
+            expect(observerOf(mower)?.observed.has(message)).toBe(false);
+        });
+
+        /** The card laid out with `content` px of room for its content, inside its 14 px of padding on each side. */
+        function measuredAt(element: MowerStatusCard, content: number): HTMLElement {
+            const haCard = laidOut(element, 400, 115, null);
+            Object.defineProperty(haCard, "clientWidth", { value: content ? content + 28 : 0, configurable: true });
+            return haCard;
+        }
+
+        // A card inside another card has no columns in its config, so only the width it is measured to have tells how
+        // little room it has. Its container queries switch at 300 and 220 px of content, and the width only ever raises
+        // the minimum its columns give. The columns are Home Assistant's own part of the config.
+        it.each<[string, Record<string, unknown>, string | undefined, number, string, number]>([
+            ["in the very narrow layout", {}, undefined, 180, "height: 351px", 6],
+            ["at the very narrow layout's edge", {}, undefined, 220, "height: 351px", 6],
+            ["just past the very narrow layout", {}, undefined, 221, "height: 275px", 5],
+            ["at the narrow layout's edge", {}, undefined, 300, "height: 275px", 5],
+            ["wide, never lower than its columns promise", {}, undefined, 301, "height: 275px", 5],
+            ["not measured yet", {}, undefined, 0, "height: 275px", 5],
+            ["with the picture turned off, in the very narrow layout", { show_image: false }, undefined, 180, "height: 339px", 6],
+            [
+                "with the picture turned off, wide, never lower than its columns promise",
+                { show_image: false },
+                undefined,
+                301,
+                "height: 253px",
+                5,
+            ],
+            ["up to a limit, in the very narrow layout", { height_mode: "max", max_height: 100 }, undefined, 180, "max-height: 351px", 6],
+            ["of half a section, measured wide", { grid_options: { columns: 6 } }, undefined, 450, "height: 351px", 6],
+            ["by rows in a sections view, in the very narrow layout", { grid_options: { rows: 5 } }, "grid", 180, "height: 100%", 6],
+        ])("and held no lower than its measured width needs %s", async (_name, extra, layout, content, style, rows) => {
+            const config = { image: "/local/mower.png", show_image: undefined, height_mode: "fixed", height: 100, ...extra };
+            const element = await card(mockHass(), config as Partial<MowerStatusCardConfig>, layout);
+            const haCard = measuredAt(element, content);
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe(style);
+            expect(element.getGridOptions().min_rows).toBe(rows);
+        });
+
+        it("and keeps the minimum its width gave it while hidden", async () => {
+            const element = await card(mockHass(), { image: "/local/mower.png", show_image: undefined, height: 100 });
+            // Measured wide first, as a hidden card measured anyway would come out as the very narrow layout.
+            const haCard = measuredAt(element, 400);
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("height: 275px");
+            measuredAt(element, 0);
+            element.requestUpdate();
+            await element.updateComplete;
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("height: 275px");
+        });
+
+        it("measuring its width in the frame, never in the observer's callback", async () => {
+            const element = await card(mockHass(), { image: "/local/mower.png", show_image: undefined, height: 100 });
+            const haCard = measuredAt(element, 180);
+            await runFrames(element);
+            measuredAt(element, 400);
+            observerOf(haCard).callback();
+            await element.updateComplete;
+            // Nothing has changed before the frame runs, so the card isn't resized while the observer is running.
+            expect(haCard.getAttribute("style")).toBe("height: 351px");
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("height: 275px");
+        });
+
+        it("following the ha-card of the message once the mower before it is gone", async () => {
+            const element = await card(mockHass(), {}, "grid");
+            const mower = root(element).querySelector("ha-card")!;
+            expect(observerOf(mower)).toBeDefined();
+            element.hass = mockHass({ "lawn_mower.matti": null });
+            await element.updateComplete;
+            const message = root(element).querySelector("ha-card")!;
+            expect(message).not.toBe(mower);
+            expect(observerOf(message)?.observed.has(mower)).toBe(false);
+        });
+
+        it("when its size changes after it has left the page and come back, as a dashboard changing views does", async () => {
+            const element = await card(mockHass(), {}, "grid");
+            laidOut(element, 208, 115, null);
+            await runFrames(element);
+            element.remove();
+            document.body.append(element);
+            await element.updateComplete;
+            await runFrames(element);
+            const haCard = laidOut(element, 301, 115, null);
+            const observer = observerOf(haCard);
+            expect(observer).toBeDefined();
+            observer.callback();
+            await runFrames(element);
+            expect(haCard.getAttribute("style")).toBe("min-height: 312px");
+        });
+    });
+
+    it.each<[string, (element: MowerStatusCard, haCard: HTMLElement) => void]>([
+        ["leaving a sections view", (element) => (element.layout = undefined)],
+        ["hidden", (_element, haCard) => Object.defineProperty(haCard, "clientWidth", { value: 0, configurable: true })],
+    ])("lets go of its rows when %s", async (_name, change) => {
+        const element = await card(mockHass(), {}, "grid");
+        const haCard = laidOut(element, 208, 115, null);
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+        change(element, haCard);
+        await element.updateComplete;
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style") ?? "").toBe("");
     });
 
     /** The card's notices, taller than the room they have, as happy-dom lays nothing out. */

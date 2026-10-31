@@ -158,6 +158,17 @@ card the large button takes a row of its own, and on a very narrow one, such as 
 the picture moves above the texts. A day and a time are never broken apart from their own words, so "Last mowed" wraps
 before "Wed, 10/14 at 3:18 PM" does.
 
+On automatic rows in a sections view, a card that `height_mode` doesn't keep to `height` or `max_height` ends on a
+whole row, so the cards under it stay on the rows. The space that takes, less than a row, goes above the buttons, which
+keeps the buttons and the name under a picture at the bottom of the card.
+
+A card held to a height, by `height_mode` or by rows set in the layout tab, keeps every text of the mower's status to
+one line, cut short with an ellipsis when it is longer. It is never held lower than its status, its buttons and the name
+under a picture need at the narrowest its columns can be, which is 5 rows for a whole section and 6 for 11 columns or
+fewer. A height set by `height_mode` is also raised to what the card's own width needs, so a card inside another card
+fits too. A section's background or a theme can make a card narrower than its columns promise, and then rows set in the
+layout tab may need raising by hand.
+
 <p>
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/narrow-light.png#gh-light-mode-only" width="270" alt="A narrow card, the ring beside the texts and the large button on a row of its own above cancel and dock">
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/narrow-dark.png#gh-dark-mode-only" width="270" alt="A narrow card, the ring beside the texts and the large button on a row of its own above cancel and dock">
