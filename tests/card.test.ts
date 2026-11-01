@@ -67,6 +67,17 @@ describe("mower-status-card", () => {
         expect(() => element.setConfig(config({ height_mode: null, height: null, max_height: null }))).not.toThrow();
     });
 
+    it("refuses a row step other than whole or half rows, with an error about the rounding", () => {
+        const element = document.createElement("mower-status-card");
+        const config = (extra: Record<string, unknown>) =>
+            ({ type: "custom:mower-status-card", entity: "lawn_mower.matti", ...extra }) as never;
+        const error = translate(browserLanguage(), "common.invalid_row_step");
+        expect(error).toMatch(/^Invalid rounding\./);
+        expect(() => element.setConfig(config({ row_step: "quarter" }))).toThrow(error);
+        expect(() => element.setConfig(config({ row_step: "half" }))).not.toThrow();
+        expect(() => element.setConfig(config({ row_step: null }))).not.toThrow();
+    });
+
     it.each([
         ["its content", undefined, {}, ""],
         ["a fixed height", undefined, { height_mode: "fixed" as const, height: 300, max_height: 400 }, "height: 300px"],
@@ -169,6 +180,9 @@ describe("mower-status-card", () => {
         (element as unknown as { fillRows(): void }).fillRows();
     }
 
+    /** The card's height in its style, without the spare room it carries alongside, which tests of its own look at. */
+    const heightOf = (haCard: HTMLElement) => (haCard.getAttribute("style") ?? "").replace(/; --mower-spare: \d+px$/, "");
+
     // A card is 64k − 8 px tall on k rows. The notices take what is added, which the measure leaves out.
     it.each<[string, string | undefined, Partial<MowerStatusCardConfig>, number, number, number | null, string]>([
         ["quiet, to the next row", "grid", {}, 208, 115, null, "min-height: 248px"],
@@ -202,7 +216,42 @@ describe("mower-status-card", () => {
         expect(parts.at(-1)!.className).toBe("image" in extra ? "footer" : "buttons");
         fillRows(element);
         await element.updateComplete;
-        expect(haCard.getAttribute("style") ?? "").toBe(style);
+        expect(heightOf(haCard)).toBe(style);
+    });
+
+    it("puts what a whole row leaves over between the status and the notices, and keeps it once there", async () => {
+        const element = await card(mockHass(), {}, "grid");
+        const haCard = laidOut(element, 208, 115, null);
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style")).toBe("min-height: 248px; --mower-spare: 40px");
+        // Drawn with it: 40 px taller, the notices 40 px lower, and their top margin the 40 px, which the measure leaves out.
+        laidOut(element, 248, 155, null);
+        const notices = root(element).querySelector<HTMLElement>(".notices")!;
+        notices.getBoundingClientRect = () => ({ top: 151, bottom: 155, height: 4 }) as DOMRect;
+        const cardStyle = { paddingLeft: "14px", paddingRight: "14px", paddingBottom: "14px", borderBottomWidth: "1px" };
+        vi.mocked(window.getComputedStyle).mockImplementation(
+            (target) =>
+                (target === haCard
+                    ? cardStyle
+                    : {
+                          paddingTop: "0px",
+                          paddingBottom: "4px",
+                          marginBottom: "0px",
+                          marginTop: "40px",
+                      }) as unknown as CSSStyleDeclaration,
+        );
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style")).toBe("min-height: 248px; --mower-spare: 40px");
+    });
+
+    it("leaves nothing over with half rows when its content ends on a half row", async () => {
+        const element = await card(mockHass(), { row_step: "half" }, "grid");
+        const haCard = laidOut(element, 216, 115, null);
+        fillRows(element);
+        await element.updateComplete;
+        expect(haCard.getAttribute("style")).toBe("min-height: 216px; --mower-spare: 0px");
     });
 
     it("measures to its own last part, past anything else a theme puts after it", async () => {
@@ -214,7 +263,7 @@ describe("mower-status-card", () => {
         haCard.append(added);
         fillRows(element);
         await element.updateComplete;
-        expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+        expect(heightOf(haCard)).toBe("min-height: 248px");
     });
 
     // The message has no notices to take what is added, so the card's own height says nothing of what the message needs.
@@ -244,7 +293,7 @@ describe("mower-status-card", () => {
         const haCard = laidOut(element, height, 0, null, end);
         fillRows(element);
         await element.updateComplete;
-        expect(haCard.getAttribute("style") ?? "").toBe(style);
+        expect(heightOf(haCard)).toBe(style);
     });
 
     describe("measured when it may have changed", () => {
@@ -298,7 +347,7 @@ describe("mower-status-card", () => {
             const element = await card(mockHass(), {}, "grid");
             const haCard = laidOut(element, 208, 115, null);
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+            expect(heightOf(haCard)).toBe("min-height: 248px");
         });
 
         it("after the update that puts it in a sections view", async () => {
@@ -309,7 +358,7 @@ describe("mower-status-card", () => {
             element.layout = "grid";
             await element.updateComplete;
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+            expect(heightOf(haCard)).toBe("min-height: 248px");
         });
 
         it("after each update, such as a notice shut", async () => {
@@ -320,7 +369,7 @@ describe("mower-status-card", () => {
             element.requestUpdate();
             await element.updateComplete;
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("min-height: 312px");
+            expect(heightOf(haCard)).toBe("min-height: 312px");
         });
 
         it("when its ha-card changes size with nothing else changed, such as a narrower card wrapping more", async () => {
@@ -335,14 +384,14 @@ describe("mower-status-card", () => {
             expect(observer.observed.has(element)).toBe(false);
             observer.callback();
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("min-height: 312px");
+            expect(heightOf(haCard)).toBe("min-height: 312px");
         });
 
         it("and lets go of its rows on the update that takes it out of a sections view", async () => {
             const element = await card(mockHass(), {}, "grid");
             const haCard = laidOut(element, 208, 115, null);
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+            expect(heightOf(haCard)).toBe("min-height: 248px");
             element.layout = undefined;
             await element.updateComplete;
             await runFrames(element);
@@ -448,7 +497,7 @@ describe("mower-status-card", () => {
             expect(observer).toBeDefined();
             observer.callback();
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("min-height: 312px");
+            expect(heightOf(haCard)).toBe("min-height: 312px");
         });
     });
 
@@ -460,7 +509,7 @@ describe("mower-status-card", () => {
         const haCard = laidOut(element, 208, 115, null);
         fillRows(element);
         await element.updateComplete;
-        expect(haCard.getAttribute("style")).toBe("min-height: 248px");
+        expect(heightOf(haCard)).toBe("min-height: 248px");
         change(element, haCard);
         await element.updateComplete;
         fillRows(element);

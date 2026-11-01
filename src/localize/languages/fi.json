@@ -4,6 +4,7 @@
         "description": "Robottiruohonleikkurin tila, akku, käynnissä oleva tehtävä, ongelmat ja painikkeet",
         "invalid_configuration": "Virheellinen konfiguraatio. Valitse ruohonleikkuri.",
         "invalid_height": "Virheellinen korkeus. Korkeuksien (height ja max_height) on oltava positiivisia lukuja pikseleinä, ja korkeustilan (height_mode) auto, fixed tai max.",
+        "invalid_row_step": "Virheellinen pyöristys. Pyöristyksen (row_step) on oltava full tai half.",
         "no_entity": "Entiteettiä {entity} ei löydy",
         "unavailable": "Ei saatavilla",
         "charging": "lataa",
@@ -85,7 +86,11 @@
         "height": "Kiinteä korkeus",
         "height_helper": "Kortti on aina näin korkea, ja ilmoitukset vierivät sen sisällä.",
         "max_height": "Enimmäiskorkeus",
-        "max_height_helper": "Kortti kasvaa sisältönsä mukana tähän korkeuteen asti, ja sen jälkeen ilmoitukset vierivät."
+        "max_height_helper": "Kortti kasvaa sisältönsä mukana tähän korkeuteen asti, ja sen jälkeen ilmoitukset vierivät.",
+        "row_step": "Pyöristys osioihin jaetussa näkymässä",
+        "row_step_helper": "Automaattisella rivikorkeudella kortin korkeus pyöristetään ylöspäin kokonaisiin riveihin, tai tilan säästämiseksi puolikkaisiin riveihin.",
+        "row_step_full": "Kokonaisiin riveihin",
+        "row_step_half": "Puolikkaisiin riveihin"
     },
     "slot": {
         "battery": "Akku",

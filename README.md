@@ -59,6 +59,7 @@ works alongside a map of the mower, such as [ha-map-card](https://github.com/nat
 | `height_mode`         | string  | How tall the card is. `auto` fits its content, `fixed` keeps it at `height`, `max` lets it grow up to `max_height`. In `fixed` and `max` the notices scroll, while the mower's status, the buttons and the name under a picture stay in view, and the card never gets lower than those and one line of notices. A height in grid rows, set in the layout tab of a sections view, is used instead | `fixed` when `height` is set, `max` when only `max_height` is, otherwise `auto` |
 | `height`              | number  | The card's height in pixels, for `fixed`                                                                                                                                                                                                                                                                                                                                                         |                                                                                 |
 | `max_height`          | number  | The card's greatest height in pixels, for `max`                                                                                                                                                                                                                                                                                                                                                  |                                                                                 |
+| `row_step`            | string  | How the card rounds its height on automatic rows in a sections view, with `height_mode` `auto`. `full` rounds up to whole rows, `half` to half rows, which saves space but may leave the cards under it half a row off the rows of the sections beside it                                                                                                                                        | `full`                                                                          |
 | `entities`            | map     | The mower's other entities, only where they differ from what the card finds. See below                                                                                                                                                                                                                                                                                                           |                                                                                 |
 
 Each key of `entities` is one of the slots below, and its value an entity id, or `none` to leave the slot out. A slot
@@ -159,8 +160,9 @@ the picture moves above the texts. A day and a time are never broken apart from 
 before "Wed, 10/14 at 3:18 PM" does.
 
 On automatic rows in a sections view, a card that `height_mode` doesn't keep to `height` or `max_height` ends on a
-whole row, so the cards under it stay on the rows. The space that takes, less than a row, goes above the buttons, which
-keeps the buttons and the name under a picture at the bottom of the card.
+whole row, so the cards under it stay on the rows, or with `row_step: half` on a half row. The space that takes goes
+between the mower's status and the notices, which keeps the buttons and the name under a picture at the bottom of the
+card.
 
 A card held to a height, by `height_mode` or by rows set in the layout tab, keeps every text of the mower's status to
 one line, cut short with an ellipsis when it is longer. It is never held lower than its status, its buttons and the name

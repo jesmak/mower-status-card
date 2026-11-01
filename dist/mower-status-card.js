@@ -608,8 +608,6 @@ var CARD_VERSION = "1.2.0";
 var ERROR_FRESH_MS = 24 * 36e5;
 var HISTORY_DAYS = 10;
 var TICK_MS = 6e4;
-var ROW_PX = 64;
-var ROW_GAP_PX = 8;
 var FEATURE_START_MOWING = 1;
 var FEATURE_PAUSE = 2;
 var FEATURE_DOCK = 4;
@@ -682,6 +680,41 @@ function tidyHeight(config) {
   return tidied;
 }
 
+// src/rows.ts
+var ROW_STEPS = ["full", "half"];
+var ROW_PX = 64;
+var ROW_GAP_PX = 8;
+function validRowStep(config) {
+  return config.row_step === void 0 || config.row_step === null || ROW_STEPS.includes(config.row_step);
+}
+function filledHeight(content, config) {
+  const step = config.row_step === "half" ? ROW_PX / 2 : ROW_PX;
+  return Math.max(1, Math.ceil((content + ROW_GAP_PX) / step)) * step - ROW_GAP_PX;
+}
+function rowStepSchema(config, text) {
+  if (heightMode(config) !== "auto") {
+    return [];
+  }
+  return [
+    {
+      name: "row_step",
+      selector: {
+        select: { mode: "dropdown", options: ROW_STEPS.map((value) => ({ value, label: text(`editor.row_step_${value}`) })) }
+      }
+    }
+  ];
+}
+function rowStepData(config) {
+  return { ...config, row_step: config.row_step ?? "full" };
+}
+function tidyRowStep(config) {
+  const tidied = { ...config };
+  if (tidied.row_step !== "half" || heightMode(tidied) !== "auto") {
+    delete tidied.row_step;
+  }
+  return tidied;
+}
+
 // src/localize/languages/en.json
 var en_default = {
   common: {
@@ -689,6 +722,7 @@ var en_default = {
     description: "A robotic lawn mower's state, battery, the task under way, its problems and its buttons",
     invalid_configuration: "Invalid configuration. Choose a lawn mower.",
     invalid_height: "Invalid height. height and max_height must be positive numbers of pixels, and height_mode auto, fixed or max.",
+    invalid_row_step: "Invalid rounding. row_step must be full or half.",
     no_entity: "Entity {entity} not found",
     unavailable: "Unavailable",
     charging: "charging",
@@ -770,7 +804,11 @@ var en_default = {
     height: "Fixed height",
     height_helper: "The card is always this tall, and the notices scroll inside it.",
     max_height: "Maximum height",
-    max_height_helper: "The card grows with its content up to this height, and then the notices scroll."
+    max_height_helper: "The card grows with its content up to this height, and then the notices scroll.",
+    row_step: "Rounding in a sections view",
+    row_step_helper: "With automatic row height, the card's height is rounded up to whole rows, or to half rows to save space.",
+    row_step_full: "Whole rows",
+    row_step_half: "Half rows"
   },
   slot: {
     battery: "Battery",
@@ -806,6 +844,7 @@ var fi_default = {
     description: "Robottiruohonleikkurin tila, akku, k\xE4ynniss\xE4 oleva teht\xE4v\xE4, ongelmat ja painikkeet",
     invalid_configuration: "Virheellinen konfiguraatio. Valitse ruohonleikkuri.",
     invalid_height: "Virheellinen korkeus. Korkeuksien (height ja max_height) on oltava positiivisia lukuja pikselein\xE4, ja korkeustilan (height_mode) auto, fixed tai max.",
+    invalid_row_step: "Virheellinen py\xF6ristys. Py\xF6ristyksen (row_step) on oltava full tai half.",
     no_entity: "Entiteetti\xE4 {entity} ei l\xF6ydy",
     unavailable: "Ei saatavilla",
     charging: "lataa",
@@ -887,7 +926,11 @@ var fi_default = {
     height: "Kiinte\xE4 korkeus",
     height_helper: "Kortti on aina n\xE4in korkea, ja ilmoitukset vieriv\xE4t sen sis\xE4ll\xE4.",
     max_height: "Enimm\xE4iskorkeus",
-    max_height_helper: "Kortti kasvaa sis\xE4lt\xF6ns\xE4 mukana t\xE4h\xE4n korkeuteen asti, ja sen j\xE4lkeen ilmoitukset vieriv\xE4t."
+    max_height_helper: "Kortti kasvaa sis\xE4lt\xF6ns\xE4 mukana t\xE4h\xE4n korkeuteen asti, ja sen j\xE4lkeen ilmoitukset vieriv\xE4t.",
+    row_step: "Py\xF6ristys osioihin jaetussa n\xE4kym\xE4ss\xE4",
+    row_step_helper: "Automaattisella rivikorkeudella kortin korkeus py\xF6ristet\xE4\xE4n yl\xF6sp\xE4in kokonaisiin riveihin, tai tilan s\xE4\xE4st\xE4miseksi puolikkaisiin riveihin.",
+    row_step_full: "Kokonaisiin riveihin",
+    row_step_half: "Puolikkaisiin riveihin"
   },
   slot: {
     battery: "Akku",
@@ -1150,7 +1193,8 @@ function mainSchema(config, mammotion, text) {
     },
     { name: "show_cancel", selector: { boolean: {} } },
     { name: "blade_warning_hours", selector: { number: { min: 0, max: 5e3, step: 1, mode: "box", unit_of_measurement: "h" } } },
-    ...heightSchema(config, text)
+    ...heightSchema(config, text),
+    ...rowStepSchema(config, text)
   ];
 }
 var SLOTS_SCHEMA = SLOTS.map((slot) => ({ name: slot, selector: { entity: { domain: SLOT_DOMAINS[slot] } } }));
@@ -1166,7 +1210,7 @@ var MowerStatusCardEditor = class extends i4 {
     if (!this.hass) {
       return A;
     }
-    const data = heightData({ ...DEFAULTS, ...this.config });
+    const data = rowStepData(heightData({ ...DEFAULTS, ...this.config }));
     const mammotion = !!this.config.entity && platformOf(this.hass, this.config.entity) === "mammotion";
     return b2`
             <ha-form
@@ -1217,7 +1261,7 @@ var MowerStatusCardEditor = class extends i4 {
         `;
   }
   mainChanged(event) {
-    const config = tidyHeight(event.detail.value);
+    const config = tidyRowStep(tidyHeight(event.detail.value));
     if (config.entity !== this.config.entity) {
       delete config.entities;
       delete config.image_variant;
@@ -1577,6 +1621,7 @@ var MowerStatusCard = class extends i4 {
     this.notices = [];
     this.seenNotices = /* @__PURE__ */ new Set();
     this.filled = 0;
+    this.spare = 0;
     this.resizes = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(() => this.fillRowsSoon());
     /** A picture of the mower's own that is transparent at its corners, a cut-out, gets the same frame as a model picture. */
     this.pictureLoaded = (event) => {
@@ -1619,6 +1664,9 @@ var MowerStatusCard = class extends i4 {
     }
     if (!validHeight(config)) {
       throw new Error(translate(browserLanguage(), "common.invalid_height"));
+    }
+    if (!validRowStep(config)) {
+      throw new Error(translate(browserLanguage(), "common.invalid_row_step"));
     }
     this.config = { ...config };
   }
@@ -1694,23 +1742,26 @@ var MowerStatusCard = class extends i4 {
     });
   }
   /**
-   * On automatic rows in a sections view, the card takes the whole rows its content needs, so the cards under it stay
-   * on the rows. The content is measured to the end of the card's last part, never by the card's own height, which is
-   * at least the rows already taken. The notices take the height added, keeping the buttons and the footer at the
-   * bottom as when the card is held, so what they have grown past their own content is left out too, or a card whose
-   * notices get fewer would keep the rows it no longer needs.
+   * On automatic rows in a sections view, the card takes the whole rows its content needs, or the half rows with
+   * `row_step: half`, so the cards under it stay on the rows. The content is measured to the end of the card's last
+   * part, never by the card's own height, which is at least the rows already taken. What a whole row leaves over goes
+   * between the top part and the notices, as their top margin, and is measured out of the content again each time.
+   * The notices take any height added beyond that, keeping the buttons and the footer at the bottom as when the card
+   * is held, so what they have grown past their own content is left out too, or a card whose notices get fewer would
+   * keep the rows it no longer needs.
    */
   fillRows() {
     const card = this.renderRoot.querySelector("ha-card");
     const last = card && [...card.children].filter((part) => part.matches(".message, .buttons, .footer")).at(-1);
     if (!card || !last || !card.clientWidth || this.layout !== "grid" || this.heightStyle()) {
       if (this.filled) this.filled = 0;
+      if (this.spare) this.spare = 0;
       return;
     }
     const cardStyle = getComputedStyle(card);
-    const content = last.getBoundingClientRect().bottom - card.getBoundingClientRect().top + (parseFloat(cardStyle.paddingBottom) || 0) + (parseFloat(cardStyle.borderBottomWidth) || 0);
-    let grown = 0;
     const notices2 = this.renderRoot.querySelector(".notices");
+    const content = last.getBoundingClientRect().bottom - card.getBoundingClientRect().top + (parseFloat(cardStyle.paddingBottom) || 0) + (parseFloat(cardStyle.borderBottomWidth) || 0) - (notices2 ? Math.max(0, parseFloat(getComputedStyle(notices2).marginTop) || 0) : 0);
+    let grown = 0;
     if (notices2) {
       const box = notices2.getBoundingClientRect();
       const style = getComputedStyle(notices2);
@@ -1718,14 +1769,16 @@ var MowerStatusCard = class extends i4 {
       const end = lastNotice ? lastNotice.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(lastNotice).marginBottom) || 0) : box.top + (parseFloat(style.paddingTop) || 0);
       grown = Math.max(0, box.bottom - end - (parseFloat(style.paddingBottom) || 0));
     }
-    const filled = gridMinRows(Math.round(content - grown)) * ROW_PX - ROW_GAP_PX;
+    const filled = filledHeight(Math.round(content - grown), this.config ?? {});
+    const spare = notices2 ? Math.max(0, Math.floor(filled - (content - grown))) : 0;
     if (filled !== this.filled) this.filled = filled;
+    if (spare !== this.spare) this.spare = spare;
   }
   heightStyle() {
     return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
   }
   cardStyle() {
-    return this.heightStyle() || (this.filled ? `min-height: ${this.filled}px` : "");
+    return this.heightStyle() || (this.filled ? `min-height: ${this.filled}px; --mower-spare: ${this.spare}px` : "");
   }
   shouldUpdate(changed) {
     const previous = changed.get("hass");
@@ -2554,12 +2607,13 @@ var MowerStatusCard = class extends i4 {
                  * Notices. The padding, taken back by the margin, keeps a focused chip's or button's outline clear of the
                  * scrolling sides and bottom. None at the top, where it would lie over the picture or ring above and take its taps.
                  */
+                /* The room a whole row leaves over, when there is any, goes above the notices, under the top part. */
                 .notices {
                     flex: 1 1 auto;
                     min-height: 0;
                     overflow-y: auto;
                     scrollbar-width: thin;
-                    margin: 0 -4px -4px;
+                    margin: var(--mower-spare, 0px) -4px -4px;
                     padding: 0 4px 4px;
                 }
 
@@ -2806,6 +2860,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], MowerStatusCard.prototype, "filled", 2);
+__decorateClass([
+  r5()
+], MowerStatusCard.prototype, "spare", 2);
 __decorateClass([
   r5()
 ], MowerStatusCard.prototype, "widthClass", 2);

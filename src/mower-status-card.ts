@@ -17,14 +17,13 @@ import {
     FEATURE_STOP,
     HISTORY_DAYS,
     MAMMOTION_ASSETS,
-    ROW_GAP_PX,
-    ROW_PX,
     TICK_MS,
 } from "./const";
 import "./editor";
 import { ScrollFade, fadeStyles } from "./fade";
 import type { HassEntity, HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
+import { filledHeight, validRowStep } from "./rows";
 import { browserLanguage, translate, translateOwn } from "./localize/localize";
 import { hasTask, lastMowingEnd, lastMowingStart, mainAction, mammotionPictures, minutesOf, notices, numberOf } from "./mower";
 import type { MainAction } from "./mower";
@@ -136,6 +135,8 @@ export class MowerStatusCard extends LitElement {
     private ticker?: ReturnType<typeof setInterval>;
     /** On automatic rows in a sections view, the height that ends the card on a whole row; 0 when it isn't set. */
     @state() private filled = 0;
+    /** The room a whole row leaves over, put between the top part and the notices rather than under the buttons. */
+    @state() private spare = 0;
     private frame?: number;
     /** The layout the card's measured width gives it, as its container queries switch; unknown before it is measured. */
     @state() private widthClass?: WidthClass;
@@ -164,6 +165,9 @@ export class MowerStatusCard extends LitElement {
         }
         if (!validHeight(config)) {
             throw new Error(translate(browserLanguage(), "common.invalid_height"));
+        }
+        if (!validRowStep(config)) {
+            throw new Error(translate(browserLanguage(), "common.invalid_row_step"));
         }
         this.config = { ...config };
     }
@@ -254,27 +258,31 @@ export class MowerStatusCard extends LitElement {
     }
 
     /**
-     * On automatic rows in a sections view, the card takes the whole rows its content needs, so the cards under it stay
-     * on the rows. The content is measured to the end of the card's last part, never by the card's own height, which is
-     * at least the rows already taken. The notices take the height added, keeping the buttons and the footer at the
-     * bottom as when the card is held, so what they have grown past their own content is left out too, or a card whose
-     * notices get fewer would keep the rows it no longer needs.
+     * On automatic rows in a sections view, the card takes the whole rows its content needs, or the half rows with
+     * `row_step: half`, so the cards under it stay on the rows. The content is measured to the end of the card's last
+     * part, never by the card's own height, which is at least the rows already taken. What a whole row leaves over goes
+     * between the top part and the notices, as their top margin, and is measured out of the content again each time.
+     * The notices take any height added beyond that, keeping the buttons and the footer at the bottom as when the card
+     * is held, so what they have grown past their own content is left out too, or a card whose notices get fewer would
+     * keep the rows it no longer needs.
      */
     private fillRows(): void {
         const card = this.renderRoot.querySelector<HTMLElement>("ha-card");
         const last = card && [...card.children].filter((part) => part.matches(".message, .buttons, .footer")).at(-1);
         if (!card || !last || !card.clientWidth || this.layout !== "grid" || this.heightStyle()) {
             if (this.filled) this.filled = 0;
+            if (this.spare) this.spare = 0;
             return;
         }
         const cardStyle = getComputedStyle(card);
+        const notices = this.renderRoot.querySelector<HTMLElement>(".notices");
         const content =
             last.getBoundingClientRect().bottom -
             card.getBoundingClientRect().top +
             (parseFloat(cardStyle.paddingBottom) || 0) +
-            (parseFloat(cardStyle.borderBottomWidth) || 0);
+            (parseFloat(cardStyle.borderBottomWidth) || 0) -
+            (notices ? Math.max(0, parseFloat(getComputedStyle(notices).marginTop) || 0) : 0);
         let grown = 0;
-        const notices = this.renderRoot.querySelector<HTMLElement>(".notices");
         if (notices) {
             const box = notices.getBoundingClientRect();
             const style = getComputedStyle(notices);
@@ -284,8 +292,10 @@ export class MowerStatusCard extends LitElement {
                 : box.top + (parseFloat(style.paddingTop) || 0);
             grown = Math.max(0, box.bottom - end - (parseFloat(style.paddingBottom) || 0));
         }
-        const filled = gridMinRows(Math.round(content - grown)) * ROW_PX - ROW_GAP_PX;
+        const filled = filledHeight(Math.round(content - grown), this.config ?? {});
+        const spare = notices ? Math.max(0, Math.floor(filled - (content - grown))) : 0;
         if (filled !== this.filled) this.filled = filled;
+        if (spare !== this.spare) this.spare = spare;
     }
 
     private heightStyle(): string {
@@ -293,7 +303,7 @@ export class MowerStatusCard extends LitElement {
     }
 
     private cardStyle(): string {
-        return this.heightStyle() || (this.filled ? `min-height: ${this.filled}px` : "");
+        return this.heightStyle() || (this.filled ? `min-height: ${this.filled}px; --mower-spare: ${this.spare}px` : "");
     }
 
     protected shouldUpdate(changed: PropertyValues): boolean {
@@ -1309,12 +1319,13 @@ export class MowerStatusCard extends LitElement {
                  * Notices. The padding, taken back by the margin, keeps a focused chip's or button's outline clear of the
                  * scrolling sides and bottom. None at the top, where it would lie over the picture or ring above and take its taps.
                  */
+                /* The room a whole row leaves over, when there is any, goes above the notices, under the top part. */
                 .notices {
                     flex: 1 1 auto;
                     min-height: 0;
                     overflow-y: auto;
                     scrollbar-width: thin;
-                    margin: 0 -4px -4px;
+                    margin: var(--mower-spare, 0px) -4px -4px;
                     padding: 0 4px 4px;
                 }
 
