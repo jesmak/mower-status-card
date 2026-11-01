@@ -1313,7 +1313,6 @@ export class MowerStatusCard extends LitElement {
                     flex: 1 1 auto;
                     min-height: 0;
                     overflow-y: auto;
-                    overscroll-behavior: contain;
                     scrollbar-width: thin;
                     margin: 0 -4px -4px;
                     padding: 0 4px 4px;
