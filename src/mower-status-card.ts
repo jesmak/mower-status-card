@@ -97,12 +97,13 @@ interface Action {
 
 /**
  * The least height a held card needs, measured live with every text of the status on one line: its border and padding,
- * the status, one line of notices, the buttons, and under a picture the name. By the room its content has: wider than
+ * the status, one line of notices with the 4 px under it that keeps a focus ring clear of the scrolling edge, the
+ * buttons, and under a picture the name. By the room its content has: wider than
  * 300 px with the buttons on one row, up to 300 px (the smaller ring or picture, and the buttons on two rows, the most
  * they take there, as Finnish's longest label needs) and up to 220 px (the picture or ring above the texts and the
  * footer's distance under the name too, as a held card has them there).
  */
-const HELD_MINIMUM = { picture: { wide: 246, narrow: 275, veryNarrow: 351 }, gauge: { wide: 216, narrow: 253, veryNarrow: 339 } };
+const HELD_MINIMUM = { picture: { wide: 246, narrow: 279, veryNarrow: 355 }, gauge: { wide: 216, narrow: 257, veryNarrow: 343 } };
 type WidthClass = keyof typeof HELD_MINIMUM.picture;
 
 /** What the main button's row on a line of its own adds: the 44 px row of icon buttons and the gap above it. */

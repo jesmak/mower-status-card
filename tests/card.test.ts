@@ -95,22 +95,22 @@ describe("mower-status-card", () => {
     const picture = { image: "/local/mower.png" };
     it.each<[string, Record<string, unknown>, number, number]>([
         // A picture of its own, so no search for a model picture is left running into the next test.
-        ["with a picture, a whole section", { ...picture }, 275, 5],
-        ["with a picture, 12 columns", { ...picture, grid_options: { columns: 12 } }, 275, 5],
-        ["with a picture, full width", { ...picture, grid_options: { columns: "full" } }, 275, 5],
-        ["with a picture, a section spanning two", { ...picture, grid_options: { columns: 24 } }, 275, 5],
-        ["with a picture, 11 columns", { ...picture, grid_options: { columns: 11 } }, 351, 6],
-        ["with a picture, 10 columns", { ...picture, grid_options: { columns: 10 } }, 351, 6],
-        ["with a picture, half a section", { ...picture, grid_options: { columns: 6 } }, 351, 6],
-        ["with a picture, fewer columns than the card allows", { ...picture, grid_options: { columns: 3 } }, 351, 6],
-        ["with a picture, rows set but no columns", { ...picture, grid_options: { rows: 6 }, layout_options: { grid_columns: 2 } }, 275, 5],
-        ["with a picture, a whole section in the older layout options", { ...picture, layout_options: { grid_columns: 4 } }, 275, 5],
-        ["with a picture, 9 columns in the older layout options", { ...picture, layout_options: { grid_columns: 3 } }, 351, 6],
-        ["with a picture, half a section in the older layout options", { ...picture, layout_options: { grid_columns: 2 } }, 351, 6],
-        ["with the picture turned off, a whole section", { show_image: false }, 253, 5],
-        ["with the picture turned off, 11 columns", { show_image: false, grid_options: { columns: 11 } }, 339, 6],
-        ["with the picture turned off, 10 columns", { show_image: false, grid_options: { columns: 10 } }, 339, 6],
-        ["with the picture turned off, half a section", { show_image: false, grid_options: { columns: 6 } }, 339, 6],
+        ["with a picture, a whole section", { ...picture }, 279, 5],
+        ["with a picture, 12 columns", { ...picture, grid_options: { columns: 12 } }, 279, 5],
+        ["with a picture, full width", { ...picture, grid_options: { columns: "full" } }, 279, 5],
+        ["with a picture, a section spanning two", { ...picture, grid_options: { columns: 24 } }, 279, 5],
+        ["with a picture, 11 columns", { ...picture, grid_options: { columns: 11 } }, 355, 6],
+        ["with a picture, 10 columns", { ...picture, grid_options: { columns: 10 } }, 355, 6],
+        ["with a picture, half a section", { ...picture, grid_options: { columns: 6 } }, 355, 6],
+        ["with a picture, fewer columns than the card allows", { ...picture, grid_options: { columns: 3 } }, 355, 6],
+        ["with a picture, rows set but no columns", { ...picture, grid_options: { rows: 6 }, layout_options: { grid_columns: 2 } }, 279, 5],
+        ["with a picture, a whole section in the older layout options", { ...picture, layout_options: { grid_columns: 4 } }, 279, 5],
+        ["with a picture, 9 columns in the older layout options", { ...picture, layout_options: { grid_columns: 3 } }, 355, 6],
+        ["with a picture, half a section in the older layout options", { ...picture, layout_options: { grid_columns: 2 } }, 355, 6],
+        ["with the picture turned off, a whole section", { show_image: false }, 257, 5],
+        ["with the picture turned off, 11 columns", { show_image: false, grid_options: { columns: 11 } }, 343, 6],
+        ["with the picture turned off, 10 columns", { show_image: false, grid_options: { columns: 10 } }, 343, 6],
+        ["with the picture turned off, half a section", { show_image: false, grid_options: { columns: 6 } }, 343, 6],
     ])("is never held lower than its status and buttons with a line of notices %s", async (_name, extra, minimum, rows) => {
         for (const [mode, style] of [
             [{ height_mode: "fixed", height: 100 }, `height: ${minimum}px`],
@@ -130,7 +130,7 @@ describe("mower-status-card", () => {
         expect(element.getGridOptions().min_rows).toBe(5);
         element.setConfig({ ...element["config"]!, height_mode: "fixed", height: 100 } as MowerStatusCardConfig);
         await element.updateComplete;
-        expect(root(element).querySelector("ha-card")!.getAttribute("style")).toBe("height: 275px");
+        expect(root(element).querySelector("ha-card")!.getAttribute("style")).toBe("height: 279px");
     });
 
     it.each<[string, string | undefined, Partial<MowerStatusCardConfig>, boolean]>([
@@ -420,23 +420,23 @@ describe("mower-status-card", () => {
         // little room it has. Its container queries switch at 300 and 220 px of content, and the width only ever raises
         // the minimum its columns give. The columns are Home Assistant's own part of the config.
         it.each<[string, Record<string, unknown>, string | undefined, number, string, number]>([
-            ["in the very narrow layout", {}, undefined, 180, "height: 351px", 6],
-            ["at the very narrow layout's edge", {}, undefined, 220, "height: 351px", 6],
-            ["just past the very narrow layout", {}, undefined, 221, "height: 275px", 5],
-            ["at the narrow layout's edge", {}, undefined, 300, "height: 275px", 5],
-            ["wide, never lower than its columns promise", {}, undefined, 301, "height: 275px", 5],
-            ["not measured yet", {}, undefined, 0, "height: 275px", 5],
-            ["with the picture turned off, in the very narrow layout", { show_image: false }, undefined, 180, "height: 339px", 6],
+            ["in the very narrow layout", {}, undefined, 180, "height: 355px", 6],
+            ["at the very narrow layout's edge", {}, undefined, 220, "height: 355px", 6],
+            ["just past the very narrow layout", {}, undefined, 221, "height: 279px", 5],
+            ["at the narrow layout's edge", {}, undefined, 300, "height: 279px", 5],
+            ["wide, never lower than its columns promise", {}, undefined, 301, "height: 279px", 5],
+            ["not measured yet", {}, undefined, 0, "height: 279px", 5],
+            ["with the picture turned off, in the very narrow layout", { show_image: false }, undefined, 180, "height: 343px", 6],
             [
                 "with the picture turned off, wide, never lower than its columns promise",
                 { show_image: false },
                 undefined,
                 301,
-                "height: 253px",
+                "height: 257px",
                 5,
             ],
-            ["up to a limit, in the very narrow layout", { height_mode: "max", max_height: 100 }, undefined, 180, "max-height: 351px", 6],
-            ["of half a section, measured wide", { grid_options: { columns: 6 } }, undefined, 450, "height: 351px", 6],
+            ["up to a limit, in the very narrow layout", { height_mode: "max", max_height: 100 }, undefined, 180, "max-height: 355px", 6],
+            ["of half a section, measured wide", { grid_options: { columns: 6 } }, undefined, 450, "height: 355px", 6],
             ["by rows in a sections view, in the very narrow layout", { grid_options: { rows: 5 } }, "grid", 180, "height: 100%", 6],
         ])("and held no lower than its measured width needs %s", async (_name, extra, layout, content, style, rows) => {
             const config = { image: "/local/mower.png", show_image: undefined, height_mode: "fixed", height: 100, ...extra };
@@ -452,12 +452,12 @@ describe("mower-status-card", () => {
             // Measured wide first, as a hidden card measured anyway would come out as the very narrow layout.
             const haCard = measuredAt(element, 400);
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("height: 275px");
+            expect(haCard.getAttribute("style")).toBe("height: 279px");
             measuredAt(element, 0);
             element.requestUpdate();
             await element.updateComplete;
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("height: 275px");
+            expect(haCard.getAttribute("style")).toBe("height: 279px");
         });
 
         it("measuring its width in the frame, never in the observer's callback", async () => {
@@ -468,9 +468,9 @@ describe("mower-status-card", () => {
             observerOf(haCard).callback();
             await element.updateComplete;
             // Nothing has changed before the frame runs, so the card isn't resized while the observer is running.
-            expect(haCard.getAttribute("style")).toBe("height: 351px");
+            expect(haCard.getAttribute("style")).toBe("height: 355px");
             await runFrames(element);
-            expect(haCard.getAttribute("style")).toBe("height: 275px");
+            expect(haCard.getAttribute("style")).toBe("height: 279px");
         });
 
         /**

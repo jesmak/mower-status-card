@@ -1618,7 +1618,7 @@ function storedDismissal(entityId) {
     return null;
   }
 }
-var HELD_MINIMUM = { picture: { wide: 246, narrow: 275, veryNarrow: 351 }, gauge: { wide: 216, narrow: 253, veryNarrow: 339 } };
+var HELD_MINIMUM = { picture: { wide: 246, narrow: 279, veryNarrow: 355 }, gauge: { wide: 216, narrow: 257, veryNarrow: 343 } };
 var BUTTON_ROW_PX = 52;
 var MAIN_ICON_PX = 20;
 var TOP_TEXTS = ".name, .state, .lines > div > span, .big-state, .sub .text, .below";
