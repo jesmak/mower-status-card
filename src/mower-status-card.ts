@@ -24,7 +24,7 @@ import { ScrollFade, fadeStyles } from "./fade";
 import { besideFits, besideNoTaller, buttonsFit } from "./fit";
 import type { HassEntity, HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
-import { filledHeight, validRowStep } from "./rows";
+import { fillLimit, filledHeight, filledStyle, validRowStep } from "./rows";
 import { browserLanguage, translate, translateOwn } from "./localize/localize";
 import { hasTask, lastMowingEnd, lastMowingStart, mainAction, mammotionPictures, minutesOf, notices, numberOf } from "./mower";
 import type { MainAction } from "./mower";
@@ -434,7 +434,8 @@ export class MowerStatusCard extends LitElement {
 
     /**
      * On automatic rows in a sections view, the card takes the whole rows its content needs, or the half rows with
-     * `row_step: half`, so the cards under it stay on the rows. The content is measured to the end of the card's last
+     * `row_step: half`, so the cards under it stay on the rows, up to the limit of a card that grows up to one. The
+     * content is measured to the end of the card's last
      * part, never by the card's own height, which is at least the rows already taken. What a whole row leaves over goes
      * between the top part and the notices, as their top margin, and is measured out of the content again each time.
      * The notices take any height added beyond that, keeping the buttons and the footer at the bottom as when the card
@@ -444,7 +445,8 @@ export class MowerStatusCard extends LitElement {
     private fillRows(): void {
         const card = this.renderRoot.querySelector<HTMLElement>("ha-card");
         const last = card && [...card.children].filter((part) => part.matches(".message, .buttons, .footer")).at(-1);
-        if (!card || !last || !card.clientWidth || this.layout !== "grid" || this.heightStyle()) {
+        const limit = fillLimit(this.config ?? {}, this.layout, this.minimumHeight());
+        if (!card || !last || !card.clientWidth || !limit) {
             if (this.filled) this.filled = 0;
             if (this.spare) this.spare = 0;
             return;
@@ -467,7 +469,7 @@ export class MowerStatusCard extends LitElement {
                 : box.top + (parseFloat(style.paddingTop) || 0);
             grown = Math.max(0, box.bottom - end - (parseFloat(style.paddingBottom) || 0));
         }
-        const filled = filledHeight(Math.round(content - grown), this.config ?? {});
+        const filled = filledHeight(Math.round(content - grown), this.config ?? {}, limit);
         const spare = notices ? Math.max(0, Math.floor(filled - (content - grown))) : 0;
         if (filled !== this.filled) this.filled = filled;
         if (spare !== this.spare) this.spare = spare;
@@ -477,8 +479,10 @@ export class MowerStatusCard extends LitElement {
         return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
     }
 
+    /** The card's inline style: the height it is held to, or the rows it fills up to any limit, with their spare room above the notices. */
     private cardStyle(): string {
-        return this.heightStyle() || (this.filled ? `min-height: ${this.filled}px; --mower-spare: ${this.spare}px` : "");
+        const style = filledStyle(this.config ?? {}, this.layout, this.minimumHeight(), this.filled);
+        return this.filled ? `${style}; --mower-spare: ${this.spare}px` : style;
     }
 
     protected shouldUpdate(changed: PropertyValues): boolean {

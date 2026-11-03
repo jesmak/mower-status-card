@@ -646,39 +646,6 @@ function heightCardSize(config, content, minimum = 0) {
   }
   return mode === "max" && config.max_height ? Math.max(1, Math.min(content, Math.round(Math.max(config.max_height, minimum) / 50))) : content;
 }
-function heightSchema(config, text) {
-  const mode = heightMode(config);
-  const field = (name) => ({
-    name,
-    selector: { number: { min: 100, max: 2e3, step: 10, unit_of_measurement: "px", mode: "box" } }
-  });
-  return [
-    {
-      name: "height_mode",
-      selector: {
-        select: { mode: "dropdown", options: HEIGHT_MODES.map((value) => ({ value, label: text(`editor.height_mode_${value}`) })) }
-      }
-    },
-    ...mode === "fixed" ? [field("height")] : mode === "max" ? [field("max_height")] : []
-  ];
-}
-function heightData(config) {
-  return { ...config, height_mode: heightMode(config) };
-}
-function tidyHeight(config) {
-  const mode = heightMode(config);
-  const tidied = { ...config };
-  if (mode !== "fixed" || !tidied.height) {
-    delete tidied.height;
-  }
-  if (mode !== "max" || !tidied.max_height) {
-    delete tidied.max_height;
-  }
-  if (!tidied.height_mode || heightMode({ ...tidied, height_mode: void 0 }) === mode) {
-    delete tidied.height_mode;
-  }
-  return tidied;
-}
 
 // src/rows.ts
 var ROW_STEPS = ["full", "half"];
@@ -687,12 +654,34 @@ var ROW_GAP_PX = 8;
 function validRowStep(config) {
   return config.row_step === void 0 || config.row_step === null || ROW_STEPS.includes(config.row_step);
 }
-function filledHeight(content, config) {
-  const step = config.row_step === "half" ? ROW_PX / 2 : ROW_PX;
-  return Math.max(1, Math.ceil((content + ROW_GAP_PX) / step)) * step - ROW_GAP_PX;
+var step = (config) => config.row_step === "half" ? ROW_PX / 2 : ROW_PX;
+function filledHeight(content, config, limit = Infinity) {
+  return Math.min(Math.max(1, Math.ceil((content + ROW_GAP_PX) / step(config))) * step(config) - ROW_GAP_PX, limit);
+}
+function fillLimit(config, layout, minimum = 0) {
+  const rows = config.grid_options ? config.grid_options.rows : config.layout_options?.grid_rows;
+  if (layout !== "grid" || typeof rows === "number") {
+    return 0;
+  }
+  const mode = heightMode(config);
+  if (mode === "fixed" && config.height) {
+    return 0;
+  }
+  if (mode !== "max" || !config.max_height) {
+    return Infinity;
+  }
+  const down = Math.floor((config.max_height + ROW_GAP_PX) / step(config)) * step(config) - ROW_GAP_PX;
+  return Math.max(down, filledHeight(minimum, config));
+}
+function filledStyle(config, layout, minimum, filled) {
+  const limit = fillLimit(config, layout, minimum);
+  if (!limit) {
+    return heightStyle(config, layout, minimum);
+  }
+  return [limit < Infinity && `max-height: ${limit}px`, filled && `min-height: ${filled}px`].filter(Boolean).join("; ");
 }
 function rowStepSchema(config, text) {
-  if (heightMode(config) !== "auto") {
+  if (heightMode(config) === "fixed" && config.height) {
     return [];
   }
   return [
@@ -709,7 +698,7 @@ function rowStepData(config) {
 }
 function tidyRowStep(config) {
   const tidied = { ...config };
-  if (tidied.row_step !== "half" || heightMode(tidied) !== "auto") {
+  if (tidied.row_step !== "half" || heightMode(tidied) === "fixed" && tidied.height) {
     delete tidied.row_step;
   }
   return tidied;
@@ -796,15 +785,6 @@ var en_default = {
     blade_warning_hours_helper: "In hours, when the mower reports none of its own",
     entities: "Entities",
     entities_helper: "The card tries to find these on the mower's device automatically. Pick another entity or empty the field if the choice is wrong.",
-    height_mode: "Height",
-    height_mode_helper: "A height set in the layout tab of a sections view is used instead.",
-    height_mode_auto: "Fits the content",
-    height_mode_fixed: "Fixed",
-    height_mode_max: "Grows up to a limit",
-    height: "Fixed height",
-    height_helper: "The card is always this tall, and the notices scroll inside it.",
-    max_height: "Maximum height",
-    max_height_helper: "The card grows with its content up to this height, and then the notices scroll.",
     row_step: "Rounding in a sections view",
     row_step_helper: "With automatic row height, the card's height is rounded up to whole rows, or to half rows to save space.",
     row_step_full: "Whole rows",
@@ -918,15 +898,6 @@ var fi_default = {
     blade_warning_hours_helper: "Tunteina, jos ruohonleikkuri ei kerro omaansa",
     entities: "Entiteetit",
     entities_helper: "Kortti yritt\xE4\xE4 l\xF6yt\xE4\xE4 n\xE4m\xE4 ruohonleikkurin laitteelta automaattisesti. Vaihda entiteetti toiseen tai tyhjenn\xE4 kentt\xE4, mik\xE4li valinta on v\xE4\xE4r\xE4.",
-    height_mode: "Korkeus",
-    height_mode_helper: "Osioihin jaetun n\xE4kym\xE4n asettelu-v\xE4lilehdell\xE4 asetettu korkeus ohittaa t\xE4m\xE4n.",
-    height_mode_auto: "Sis\xE4ll\xF6n mukaan",
-    height_mode_fixed: "Kiinte\xE4",
-    height_mode_max: "Kasvaa rajaan asti",
-    height: "Kiinte\xE4 korkeus",
-    height_helper: "Kortti on aina n\xE4in korkea, ja ilmoitukset vieriv\xE4t sen sis\xE4ll\xE4.",
-    max_height: "Enimm\xE4iskorkeus",
-    max_height_helper: "Kortti kasvaa sis\xE4lt\xF6ns\xE4 mukana t\xE4h\xE4n korkeuteen asti, ja sen j\xE4lkeen ilmoitukset vieriv\xE4t.",
     row_step: "Py\xF6ristys osioihin jaetussa n\xE4kym\xE4ss\xE4",
     row_step_helper: "Automaattisella rivikorkeudella kortin korkeus py\xF6ristet\xE4\xE4n yl\xF6sp\xE4in kokonaisiin riveihin, tai tilan s\xE4\xE4st\xE4miseksi puolikkaisiin riveihin.",
     row_step_full: "Kokonaisiin riveihin",
@@ -1193,7 +1164,6 @@ function mainSchema(config, mammotion, text) {
     },
     { name: "show_cancel", selector: { boolean: {} } },
     { name: "blade_warning_hours", selector: { number: { min: 0, max: 5e3, step: 1, mode: "box", unit_of_measurement: "h" } } },
-    ...heightSchema(config, text),
     ...rowStepSchema(config, text)
   ];
 }
@@ -1210,7 +1180,7 @@ var MowerStatusCardEditor = class extends i4 {
     if (!this.hass) {
       return A;
     }
-    const data = rowStepData(heightData({ ...DEFAULTS, ...this.config }));
+    const data = rowStepData({ ...DEFAULTS, ...this.config });
     const mammotion = !!this.config.entity && platformOf(this.hass, this.config.entity) === "mammotion";
     return b2`
             <ha-form
@@ -1261,7 +1231,7 @@ var MowerStatusCardEditor = class extends i4 {
         `;
   }
   mainChanged(event) {
-    const config = tidyRowStep(tidyHeight(event.detail.value));
+    const config = tidyRowStep(event.detail.value);
     if (config.entity !== this.config.entity) {
       delete config.entities;
       delete config.image_variant;
@@ -1883,7 +1853,8 @@ var MowerStatusCard = class extends i4 {
   }
   /**
    * On automatic rows in a sections view, the card takes the whole rows its content needs, or the half rows with
-   * `row_step: half`, so the cards under it stay on the rows. The content is measured to the end of the card's last
+   * `row_step: half`, so the cards under it stay on the rows, up to the limit of a card that grows up to one. The
+   * content is measured to the end of the card's last
    * part, never by the card's own height, which is at least the rows already taken. What a whole row leaves over goes
    * between the top part and the notices, as their top margin, and is measured out of the content again each time.
    * The notices take any height added beyond that, keeping the buttons and the footer at the bottom as when the card
@@ -1893,7 +1864,8 @@ var MowerStatusCard = class extends i4 {
   fillRows() {
     const card = this.renderRoot.querySelector("ha-card");
     const last = card && [...card.children].filter((part) => part.matches(".message, .buttons, .footer")).at(-1);
-    if (!card || !last || !card.clientWidth || this.layout !== "grid" || this.heightStyle()) {
+    const limit = fillLimit(this.config ?? {}, this.layout, this.minimumHeight());
+    if (!card || !last || !card.clientWidth || !limit) {
       if (this.filled) this.filled = 0;
       if (this.spare) this.spare = 0;
       return;
@@ -1909,7 +1881,7 @@ var MowerStatusCard = class extends i4 {
       const end = lastNotice ? lastNotice.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(lastNotice).marginBottom) || 0) : box.top + (parseFloat(style.paddingTop) || 0);
       grown = Math.max(0, box.bottom - end - (parseFloat(style.paddingBottom) || 0));
     }
-    const filled = filledHeight(Math.round(content - grown), this.config ?? {});
+    const filled = filledHeight(Math.round(content - grown), this.config ?? {}, limit);
     const spare = notices2 ? Math.max(0, Math.floor(filled - (content - grown))) : 0;
     if (filled !== this.filled) this.filled = filled;
     if (spare !== this.spare) this.spare = spare;
@@ -1917,8 +1889,10 @@ var MowerStatusCard = class extends i4 {
   heightStyle() {
     return heightStyle(this.config ?? {}, this.layout, this.minimumHeight());
   }
+  /** The card's inline style: the height it is held to, or the rows it fills up to any limit, with their spare room above the notices. */
   cardStyle() {
-    return this.heightStyle() || (this.filled ? `min-height: ${this.filled}px; --mower-spare: ${this.spare}px` : "");
+    const style = filledStyle(this.config ?? {}, this.layout, this.minimumHeight(), this.filled);
+    return this.filled ? `${style}; --mower-spare: ${this.spare}px` : style;
   }
   shouldUpdate(changed) {
     const previous = changed.get("hass");
@@ -2440,11 +2414,11 @@ var MowerStatusCard = class extends i4 {
     if (level === null) {
       return "mdi:battery-unknown";
     }
-    const step = Math.round(level / 10) * 10;
+    const step2 = Math.round(level / 10) * 10;
     if (this.charging()) {
-      return step >= 100 ? "mdi:battery-charging-100" : `mdi:battery-charging-${Math.max(10, step)}`;
+      return step2 >= 100 ? "mdi:battery-charging-100" : `mdi:battery-charging-${Math.max(10, step2)}`;
     }
-    return step >= 100 ? "mdi:battery" : step < 10 ? "mdi:battery-outline" : `mdi:battery-${step}`;
+    return step2 >= 100 ? "mdi:battery" : step2 < 10 ? "mdi:battery-outline" : `mdi:battery-${step2}`;
   }
   batteryColor(level) {
     if (level < 15) {

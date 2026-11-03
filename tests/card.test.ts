@@ -205,7 +205,8 @@ describe("mower-status-card", () => {
         ["in the fixed mode with no height, which holds nothing", "grid", { height_mode: "fixed" }, 208, 115, null, "min-height: 248px"],
         ["not outside a sections view", undefined, {}, 208, 115, null, ""],
         ["not when held to a height", "grid", { height: 300 }, 300, 207, null, "height: 300px"],
-        ["not when held up to a limit", "grid", { max_height: 400 }, 208, 115, null, "max-height: 400px"],
+        ["up to a limit, under it", "grid", { max_height: 400 }, 208, 115, null, "max-height: 376px; min-height: 248px"],
+        ["up to a limit, over it", "grid", { max_height: 400 }, 376, 483, 463, "max-height: 376px; min-height: 376px"],
         ["not when held by rows", "grid", { grid_options: { rows: 6 } }, 376, 283, null, "height: 100%"],
         ["not when held by the older layout options' rows", "grid", { layout_options: { grid_rows: 6 } }, 376, 283, null, "height: 100%"],
     ])("ends on a whole row %s", async (_name, layout, extra, height, bottom, last, style) => {
@@ -273,7 +274,8 @@ describe("mower-status-card", () => {
         ["for a missing mower, giving back the rows the mower filled before it", "grid", {}, 376, 376, 105, "min-height: 120px"],
         ["for a missing mower, but not outside a sections view", undefined, {}, 0, 48, 33, ""],
         ["for a missing mower, but not when held to a height", "grid", { height: 300 }, 0, 300, 33, "height: 300px"],
-        ["for a missing mower, but not when held up to a limit", "grid", { max_height: 400 }, 0, 48, 33, "max-height: 400px"],
+        ["for a missing mower, up to a limit, under it", "grid", { max_height: 400 }, 0, 48, 33, "max-height: 376px; min-height: 56px"],
+        ["for a missing mower, up to a limit, over it", "grid", { max_height: 400 }, 0, 376, 500, "max-height: 376px; min-height: 376px"],
         ["for a missing mower, but not when held by rows", "grid", { grid_options: { rows: 6 } }, 0, 376, 33, "height: 100%"],
         [
             "for a missing mower, but not when held by the older layout options' rows",
