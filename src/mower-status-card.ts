@@ -380,8 +380,14 @@ export class MowerStatusCard extends LitElement {
         const width = (element: Element) => element.getBoundingClientRect().width / scale;
         const parts = [top, footer].filter((part): part is HTMLElement => !!part && width(part) > 0);
         if (!parts.length) return { top: this.splits.top, footer: this.splits.footer };
-        const heights = parts.map((part) => getComputedStyle(part).height);
-        parts.forEach((part, index) => (part.style.height = heights[index]));
+        // A computed height has six significant digits, which can fall short of the 1/64 px a browser lays out in, and a
+        // part held to that would shrink by a fraction while it is measured. So it is held to the 1/64 px it rounds to,
+        // its overflow clipped so that a text laid out wider than it gives nothing around it a scrollbar.
+        const heights = parts.map((part) => Math.round(px(getComputedStyle(part).height) * 64) / 64);
+        parts.forEach((part, index) => {
+            part.style.height = `${heights[index]}px`;
+            part.style.overflow = "hidden";
+        });
         const needs = (texts: Element[]) =>
             texts.map((text) => {
                 const line = (text.closest(".lines > div, .sub > span") ?? text.parentElement)!.getBoundingClientRect();
@@ -413,7 +419,10 @@ export class MowerStatusCard extends LitElement {
             const stacked = distance ? heightAt(name, width(footer)) + px(getComputedStyle(footer).rowGap) + distanceHeight : 0;
             result.footer = !nameWords || !besideNoTaller(beside, stacked);
         }
-        parts.forEach((part) => (part.style.height = ""));
+        parts.forEach((part) => {
+            part.style.height = "";
+            part.style.overflow = "";
+        });
         return result;
     }
 

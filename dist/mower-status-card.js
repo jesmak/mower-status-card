@@ -1835,8 +1835,11 @@ var MowerStatusCard = class extends i4 {
     const width = (element) => element.getBoundingClientRect().width / scale;
     const parts = [top, footer].filter((part) => !!part && width(part) > 0);
     if (!parts.length) return { top: this.splits.top, footer: this.splits.footer };
-    const heights = parts.map((part) => getComputedStyle(part).height);
-    parts.forEach((part, index) => part.style.height = heights[index]);
+    const heights = parts.map((part) => Math.round(px(getComputedStyle(part).height) * 64) / 64);
+    parts.forEach((part, index) => {
+      part.style.height = `${heights[index]}px`;
+      part.style.overflow = "hidden";
+    });
     const needs = (texts) => texts.map((text) => {
       const line = (text.closest(".lines > div, .sub > span") ?? text.parentElement).getBoundingClientRect();
       const box = text.getBoundingClientRect();
@@ -1867,7 +1870,10 @@ var MowerStatusCard = class extends i4 {
       const stacked = distance ? heightAt(name, width(footer)) + px(getComputedStyle(footer).rowGap) + distanceHeight : 0;
       result.footer = !nameWords || !besideNoTaller(beside, stacked);
     }
-    parts.forEach((part) => part.style.height = "");
+    parts.forEach((part) => {
+      part.style.height = "";
+      part.style.overflow = "";
+    });
     return result;
   }
   /** How many icon buttons are beside the main button: Cancel or Stop, and Dock unless the main button docks. */
