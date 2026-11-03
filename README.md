@@ -32,9 +32,8 @@ works alongside a map of the mower, such as [ha-map-card](https://github.com/nat
 
 ### With HACS
 
-1. Add this repository to HACS custom repositories with type **Dashboard**
-2. Search for Mower status card in HACS and download it
-3. Refresh your browser
+1. Search for Mower status card in HACS and download it
+2. Refresh your browser
 
 ### Manual
 
@@ -286,6 +285,6 @@ MIT, see [LICENSE](LICENSE). The photo of a mower in the screenshots is CC0, see
 [releases-shield]: https://img.shields.io/github/release/jesmak/mower-status-card.svg?style=for-the-badge
 [release-date-shield]: https://img.shields.io/github/release-date/jesmak/mower-status-card?style=for-the-badge
 [releases]: https://github.com/jesmak/mower-status-card/releases
-[hacs-shield]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
-[hacs]: https://hacs.xyz/docs/faq/custom_repositories/
+[hacs-shield]: https://img.shields.io/badge/HACS-Default-green.svg?style=for-the-badge
+[hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=jesmak&repository=mower-status-card&category=plugin
 [license-shield]: https://img.shields.io/github/license/jesmak/mower-status-card.svg?style=for-the-badge
