@@ -473,6 +473,147 @@ describe("mower-status-card", () => {
             expect(haCard.getAttribute("style")).toBe("height: 275px");
         });
 
+        /**
+         * The card with a picture, laid out with `content` px of room for its content, and the widths its measuring of
+         * the splits reads: the main button's labels in its font, the longest word of every text beside the picture
+         * (the lines' after a 16 px icon and its 6 px gap), the name's under it, and the distance's. The texts beside the
+         * 96 px picture are `info` px tall beside it and `infoUnder` px under it, and the name `nameBeside` px tall beside
+         * the 16 px distance and `nameUnder` px over it.
+         */
+        function splitAt(
+            element: MowerStatusCard,
+            content: number,
+            { label = 0, word = 0, name = 0, distance = 0, info = 0, infoUnder = 0, nameBeside = 0, nameUnder = 0 } = {},
+        ): HTMLElement {
+            const haCard = root(element).querySelector<HTMLElement>("ha-card")!;
+            const rect =
+                (width: number, left = 0) =>
+                () =>
+                    ({ left, right: left + width, width, top: 0, bottom: 0, height: 0 }) as DOMRect;
+            Object.defineProperty(haCard, "clientWidth", { value: content + 28, configurable: true });
+            haCard.getBoundingClientRect = rect(content + 28);
+            const set = (selector: string, width: number, left = 0) =>
+                haCard.querySelectorAll<HTMLElement>(selector).forEach((part) => (part.getBoundingClientRect = rect(width, left)));
+            set(".buttons, .picture-top, .footer, .sub > span, .info, .lines > div", content);
+            set(".big-state, .below, .name, .state", word);
+            set(".sub .text, .lines > div > span", word, 22);
+            set(".footer-name", name);
+            set(".footer-distance", distance);
+            const styles = new Map<Element | null, Record<string, string>>([
+                [haCard, { width: `${content + 28}px`, paddingLeft: "14px", paddingRight: "14px" }],
+                [
+                    haCard.querySelector(".button.main"),
+                    {
+                        paddingLeft: "12px",
+                        paddingRight: "12px",
+                        columnGap: "8px",
+                        fontWeight: "500",
+                        fontSize: "14px",
+                        fontFamily: "Roboto",
+                    },
+                ],
+                [haCard.querySelector(".picture"), { width: "120px", height: "96px" }],
+                [haCard.querySelector(".picture-top"), { columnGap: "12px", rowGap: "12px", height: "96px" }],
+                [haCard.querySelector(".footer"), { columnGap: "8px", rowGap: "2px", height: "16px" }],
+                [haCard.querySelector(".footer-distance"), { height: "16px" }],
+            ]);
+            // A text's height depends on the width it is laid out at: the room beside the picture or the distance, or all of it.
+            const laidOutAt = (target: Element, beside: number, under: number, room: number) => ({
+                get height() {
+                    const width = (target as HTMLElement).style.width;
+                    return width === `${room}px` ? `${beside}px` : width === `${content}px` ? `${under}px` : "0px";
+                },
+            });
+            const infoBox = haCard.querySelector(".info");
+            const nameBox = haCard.querySelector(".footer-name");
+            vi.spyOn(window, "getComputedStyle").mockImplementation((target) => {
+                const style =
+                    target === infoBox
+                        ? laidOutAt(target, info, infoUnder, content - 132)
+                        : target === nameBox
+                          ? laidOutAt(target, nameBeside, nameUnder, content - distance - 8)
+                          : (styles.get(target) ?? { display: "block", direction: "ltr" });
+                return style as unknown as CSSStyleDeclaration;
+            });
+            // Measured in the button's own font only, as a canvas keeps its 10 px default when given Chrome's empty shorthand.
+            const context = {
+                font: "10px sans-serif",
+                letterSpacing: "0px",
+                measureText: () => ({ width: context.font.includes("500 14px Roboto") ? label : 0 }),
+            };
+            vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(context as unknown as CanvasRenderingContext2D);
+            return haCard;
+        }
+
+        const classOf = (element: MowerStatusCard, selector: string) => root(element).querySelector(selector)!.className;
+        const picture = { image: "/local/mower.png", show_image: undefined };
+
+        // 160 px of the row besides the label: the main button's padding, its icon and gap, two icon buttons and their gaps.
+        it.each<[string, number, string]>([
+            ["keeps the main button beside the icon buttons while its longest label fits", 240, "buttons"],
+            ["puts the main button on a row of its own when its longest label doesn't fit", 241, "buttons split"],
+        ])("%s", async (_name, label, buttons) => {
+            const element = await card(mockHass(), picture);
+            splitAt(element, 400, { label });
+            await runFrames(element);
+            expect(classOf(element, ".buttons")).toBe(buttons);
+        });
+
+        // Beside a 120 px picture with a 12 px gap, 268 px of the 400 are left for the texts.
+        it.each<[string, Record<string, number>, string, string]>([
+            ["keeps the picture beside the texts while every word fits", { word: 246 }, "picture-top", "footer"],
+            ["puts the picture above the texts when a word doesn't fit beside it", { word: 247 }, "picture-top stacked", "footer"],
+            // Beside the picture 120 px of texts, under it 96 + 12 + 12 = 120 px with them: a tie stays beside.
+            ["keeps the picture beside texts no taller there", { info: 120, infoUnder: 12 }, "picture-top", "footer"],
+            ["puts the picture above texts taller beside it", { info: 121, infoUnder: 12 }, "picture-top stacked", "footer"],
+            // Beside the 16 px distance 34 px of name, over it 16 + 2 + 16 = 34 px with it: a tie stays beside.
+            ["keeps the distance beside a name no taller there", { distance: 100, nameBeside: 34, nameUnder: 16 }, "picture-top", "footer"],
+            [
+                "puts the distance under a name taller beside it",
+                { distance: 100, nameBeside: 35, nameUnder: 16 },
+                "picture-top",
+                "footer stacked",
+            ],
+            [
+                "keeps the distance beside the name while the name's longest word fits",
+                { name: 292, distance: 100 },
+                "picture-top",
+                "footer",
+            ],
+            [
+                "puts the distance under the name when the name's longest word doesn't fit",
+                { name: 293, distance: 100 },
+                "picture-top",
+                "footer stacked",
+            ],
+        ])("%s", async (_name, widths, top, footer) => {
+            const element = await card(mockHass(), picture);
+            splitAt(element, 400, widths);
+            await runFrames(element);
+            expect(classOf(element, ".picture-top")).toBe(top);
+            expect(classOf(element, ".footer")).toBe(footer);
+        });
+
+        // Held, its texts are cut short on one line, so the very narrow layout stacks them whatever their words.
+        it.each<[string, number, Record<string, number>, string, string]>([
+            ["stacks the picture and the distance held in the very narrow layout", 220, {}, "picture-top stacked", "footer stacked"],
+            ["keeps them side by side held past it, however long a word", 221, { word: 500, name: 500 }, "picture-top", "footer"],
+        ])("%s", async (_name, content, widths, top, footer) => {
+            const element = await card(mockHass(), { ...picture, height: 100 });
+            splitAt(element, content, widths);
+            await runFrames(element);
+            expect(classOf(element, ".picture-top")).toBe(top);
+            expect(classOf(element, ".footer")).toBe(footer);
+        });
+
+        it("and held wide, adds the main button's row to its minimum when its longest label needs one", async () => {
+            const element = await card(mockHass(), { ...picture, height: 100 });
+            const haCard = splitAt(element, 400, { label: 241 });
+            await runFrames(element);
+            expect(classOf(element, ".buttons")).toBe("buttons split");
+            expect(haCard.getAttribute("style")).toBe("height: 298px");
+        });
+
         it("following the ha-card of the message once the mower before it is gone", async () => {
             const element = await card(mockHass(), {}, "grid");
             const mower = root(element).querySelector("ha-card")!;
@@ -601,6 +742,11 @@ describe("mower-status-card", () => {
         expect([text(root(element).querySelector(".ring b")), text(root(element).querySelector(".ring span"))]).toEqual(["46 %", "tehty"]);
         expect(text(root(element).querySelector(".lines"))).toContain("Noin 38 min jäljellä");
         expect(text(root(element).querySelector(".lines"))).toContain("Akku 94 %, 32 min kulunut");
+        // A number stays on the line of its unit, so a narrow card never wraps between them.
+        const raw = root(element).querySelector(".lines")!.textContent ?? "";
+        expect(raw).toContain("94 %");
+        expect(raw).toContain("38 min");
+        expect(raw).not.toMatch(/\d [%a-z]/);
     });
 
     it("continues an unfinished task with the integration's own button", async () => {

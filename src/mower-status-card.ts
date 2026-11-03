@@ -21,6 +21,7 @@ import {
 } from "./const";
 import "./editor";
 import { ScrollFade, fadeStyles } from "./fade";
+import { besideFits, besideNoTaller, buttonsFit } from "./fit";
 import type { HassEntity, HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
 import { filledHeight, validRowStep } from "./rows";
@@ -96,12 +97,64 @@ interface Action {
 
 /**
  * The least height a held card needs, measured live with every text of the status on one line: its border and padding,
- * the status, one line of notices, the buttons, and under a picture the name. By the room its content has, as its own
- * container queries lay it out: wider than 300 px, up to 300 px (the buttons on two rows) and up to 220 px (the picture
- * or ring above the texts too).
+ * the status, one line of notices, the buttons, and under a picture the name. By the room its content has: wider than
+ * 300 px with the buttons on one row, up to 300 px (the smaller ring or picture, and the buttons on two rows, the most
+ * they take there, as Finnish's longest label needs) and up to 220 px (the picture or ring above the texts and the
+ * footer's distance under the name too, as a held card has them there).
  */
 const HELD_MINIMUM = { picture: { wide: 246, narrow: 275, veryNarrow: 351 }, gauge: { wide: 216, narrow: 253, veryNarrow: 339 } };
 type WidthClass = keyof typeof HELD_MINIMUM.picture;
+
+/** What the main button's row on a line of its own adds: the 44 px row of icon buttons and the gap above it. */
+const BUTTON_ROW_PX = 52;
+
+/** The main button's icon, as its styles size it. */
+const MAIN_ICON_PX = 20;
+
+/** The texts beside the ring or the picture whose words must not break there. */
+const TOP_TEXTS = ".name, .state, .lines > div > span, .big-state, .sub .text, .below";
+
+/** The parts of the card that go to a line of their own when they don't fit beside the rest. */
+interface Splits {
+    /** The main button on a row of its own, the icon buttons under it. */
+    buttons: boolean;
+    /** The ring or the picture above the texts. */
+    top: boolean;
+    /** The distance under the name. */
+    footer: boolean;
+}
+
+/**
+ * How much the card is drawn scaled, 1 unless something scales it, such as a dialog's opening animation (0.8 to 1).
+ * Drawn widths are scaled while computed styles are not, so drawn measures are divided by it.
+ */
+function drawnScale(card: HTMLElement): number {
+    const layout = px(getComputedStyle(card).width);
+    const drawn = card.getBoundingClientRect().width;
+    return layout > 0 && drawn > 0 ? drawn / layout : 1;
+}
+
+/**
+ * A number kept on the same line as its unit, "94 %" and "1 h 15 min", with a no-break space after each digit that is
+ * followed by a space, as Home Assistant's formatted states and the translated durations have a plain one there.
+ */
+export function withUnit(text: string): string {
+    return text.replace(/(\d) (?=\S)/g, "$1\u00a0");
+}
+
+/** An element's height laid out at a width of the layout's pixels, its own width and flex left as they were after. */
+function heightAt(element: HTMLElement, width: number): number {
+    element.style.flex = "none";
+    element.style.width = `${width}px`;
+    const height = px(getComputedStyle(element).height);
+    element.style.flex = "";
+    element.style.width = "";
+    return height;
+}
+
+function px(value: string): number {
+    return Number.parseFloat(value) || 0;
+}
 
 @customElement("mower-status-card")
 export class MowerStatusCard extends LitElement {
@@ -140,6 +193,10 @@ export class MowerStatusCard extends LitElement {
     private frame?: number;
     /** The layout the card's measured width gives it, as its container queries switch; unknown before it is measured. */
     @state() private widthClass?: WidthClass;
+    /** As last measured, what goes to a line of its own. */
+    @state() private splits: Splits = { buttons: false, top: false, footer: false };
+    /** A canvas to measure the labels of buttons not drawn now with, kept once there is one. */
+    private labels?: CanvasRenderingContext2D;
     private readonly resizes = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(() => this.fillRowsSoon());
     /** The ha-card the observer follows. The host is inline, so its own box never changes size for an observer. */
     private observed?: Element;
@@ -190,12 +247,16 @@ export class MowerStatusCard extends LitElement {
      * drawn: a whole section counts as the narrow layout, 11 columns or fewer as the very narrow one. The width covers
      * what they don't promise, such as a card inside another card, whose config has no columns of its own. Whether a
      * picture is found is known only from the data, so unless the configuration turns the picture off, the minimum is
-     * the picture layout's, the taller.
+     * the picture layout's, the taller. A wide card whose longest label puts the main button on a row of its own, as a
+     * larger font may, gets that row on top.
      */
     private minimumHeight(): number {
         const sizes = this.config?.show_image === false ? HELD_MINIMUM.gauge : HELD_MINIMUM.picture;
         const byColumns = sizes[this.columns() <= 11 ? "veryNarrow" : "narrow"];
-        return Math.max(byColumns, this.widthClass ? sizes[this.widthClass] : 0);
+        const byWidth = this.widthClass
+            ? sizes[this.widthClass] + (this.widthClass === "wide" && this.splits.buttons ? BUTTON_ROW_PX : 0)
+            : 0;
+        return Math.max(byColumns, byWidth);
     }
 
     /**
@@ -253,8 +314,113 @@ export class MowerStatusCard extends LitElement {
         cancelAnimationFrame(this.frame ?? 0);
         this.frame = requestAnimationFrame(() => {
             this.measureWidth();
+            this.measureSplits();
             this.fillRows();
         });
+    }
+
+    /**
+     * Puts on a line of its own only what doesn't fit beside the rest. The main button goes on a row of its own when the
+     * longest label the mower can show wouldn't fit whole beside the icon buttons, so the row doesn't change with the
+     * mower's state. Unheld, the ring or the picture goes above the texts, and the distance under the name, when a word
+     * would break beside them or the texts would be taller there than with them moved out. Held, the texts are cut short
+     * on one line, so no word can tell: they are stacked in the very narrow layout, which the held minimum is measured
+     * for, so that a long name never needs more height than the card's columns promise.
+     */
+    private measureSplits(): void {
+        const card = this.renderRoot.querySelector<HTMLElement>("ha-card");
+        if (!card?.clientWidth) return;
+        const scale = drawnScale(card);
+        const held = !!this.heightStyle();
+        const veryNarrow = this.widthClass === "veryNarrow";
+        const texts = held ? { top: veryNarrow, footer: veryNarrow } : this.measureTexts(card, scale);
+        const next: Splits = { buttons: this.measureButtons(card, scale), ...texts };
+        if (next.buttons !== this.splits.buttons || next.top !== this.splits.top || next.footer !== this.splits.footer) {
+            this.splits = next;
+        }
+    }
+
+    /** Whether the main button needs a row of its own for the longest label the mower can show, measured in its font. */
+    private measureButtons(card: HTMLElement, scale: number): boolean {
+        const row = card.querySelector<HTMLElement>(".buttons");
+        const main = row?.querySelector<HTMLElement>(".button.main");
+        const mower = this.hass?.states[this.config?.entity ?? ""];
+        this.labels ??= document.createElement("canvas").getContext("2d") ?? undefined;
+        const context = this.labels;
+        const width = row ? row.getBoundingClientRect().width / scale : 0;
+        if (!main || !mower || !context || !width) return this.splits.buttons;
+        const style = getComputedStyle(main);
+        // The icon counts even where the very narrow layout hides it, so the row doesn't go back to one line as the card
+        // narrows past that width and split again just after.
+        const fixed = px(style.paddingLeft) + px(style.paddingRight) + MAIN_ICON_PX + px(style.columnGap);
+        // Chrome leaves the computed font shorthand empty, which a canvas ignores, keeping its own 10 px font.
+        context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        context.letterSpacing = style.letterSpacing === "normal" ? "0px" : style.letterSpacing;
+        const features = Number(mower.attributes.supported_features ?? 0);
+        const actions: MainAction[] = [mainAction("mowing", features), "continue", "start"];
+        return actions.some(
+            (action) =>
+                !buttonsFit(width, fixed, context.measureText(this.text(this.mainLabel(action))).width, this.iconButtons(features, action)),
+        );
+    }
+
+    /**
+     * Whether the ring or the picture, and the footer's distance, are to go on a line of their own: when a word of the
+     * texts beside them would break there, or the texts beside them would be taller than with the part moved out. The
+     * words are measured with each text at its min-content width, its longest word, and the distance at its whole width.
+     * The heights are then measured with the texts laid out as they wrap, at the room beside the part and at the whole
+     * width. The top and the footer are held to their drawn heights meanwhile, so nothing around them moves. The room
+     * beside the ring or picture is the same stacked or not, as are the gaps and where a text starts on its line after an
+     * icon, so the measure never depends on what it decides.
+     */
+    private measureTexts(card: HTMLElement, scale: number): Pick<Splits, "top" | "footer"> {
+        const top = card.querySelector<HTMLElement>(".gauge-top, .picture-top");
+        const footer = card.querySelector<HTMLElement>(".footer");
+        const width = (element: Element) => element.getBoundingClientRect().width / scale;
+        const parts = [top, footer].filter((part): part is HTMLElement => !!part && width(part) > 0);
+        if (!parts.length) return { top: this.splits.top, footer: this.splits.footer };
+        const heights = parts.map((part) => getComputedStyle(part).height);
+        parts.forEach((part, index) => (part.style.height = heights[index]));
+        const needs = (texts: Element[]) =>
+            texts.map((text) => {
+                const line = (text.closest(".lines > div, .sub > span") ?? text.parentElement)!.getBoundingClientRect();
+                const box = text.getBoundingClientRect();
+                const start = getComputedStyle(text).direction === "rtl" ? line.right - box.right : box.left - line.left;
+                return (start + box.width) / scale;
+            });
+        const result = { top: this.splits.top, footer: this.splits.footer };
+        const side = top?.querySelector<HTMLElement>(".ring, .picture");
+        const info = top?.querySelector<HTMLElement>(".info");
+        const name = footer?.querySelector<HTMLElement>(".footer-name");
+        const distance = footer?.querySelector<HTMLElement>(".footer-distance");
+        const topRoom = top ? width(top) - (side ? px(getComputedStyle(side).width) : 0) - px(getComputedStyle(top).columnGap) : 0;
+        card.classList.add("measuring");
+        const topWords = top && parts.includes(top) ? besideFits(topRoom, needs([...top.querySelectorAll(TOP_TEXTS)])) : undefined;
+        const distanceWidth = distance ? width(distance) : 0;
+        const distanceHeight = distance ? px(getComputedStyle(distance).height) : 0;
+        const nameRoom = footer ? width(footer) - (distance ? distanceWidth + px(getComputedStyle(footer).columnGap) : 0) : 0;
+        const nameWords = footer && parts.includes(footer) ? besideFits(nameRoom, needs(name ? [name] : [])) : undefined;
+        card.classList.remove("measuring");
+        if (top && info && topWords !== undefined) {
+            const sideHeight = side ? px(getComputedStyle(side).height) : 0;
+            const beside = Math.max(sideHeight, heightAt(info, topRoom));
+            const stacked = sideHeight + px(getComputedStyle(top).rowGap) + heightAt(info, width(top));
+            result.top = !topWords || !besideNoTaller(beside, stacked);
+        }
+        if (footer && name && nameWords !== undefined) {
+            const beside = distance ? Math.max(distanceHeight, heightAt(name, nameRoom)) : 0;
+            const stacked = distance ? heightAt(name, width(footer)) + px(getComputedStyle(footer).rowGap) + distanceHeight : 0;
+            result.footer = !nameWords || !besideNoTaller(beside, stacked);
+        }
+        parts.forEach((part) => (part.style.height = ""));
+        return result;
+    }
+
+    /** How many icon buttons are beside the main button: Cancel or Stop, and Dock unless the main button docks. */
+    private iconButtons(features: number, action: MainAction): number {
+        const stop = this.config?.show_cancel !== false && (!!this.slots.cancel || !!(features & FEATURE_STOP));
+        const dock = !!(features & FEATURE_DOCK) && action !== "dock";
+        return Number(stop) + Number(dock);
     }
 
     /**
@@ -404,7 +570,7 @@ export class MowerStatusCard extends LitElement {
                   ? { value: battery, label: this.text("common.battery"), color: this.batteryColor(battery) }
                   : null;
         return html`
-            <div class="gauge-top">
+            <div class="gauge-top${this.splits.top ? " stacked" : ""}">
                 <div class="ring" style="--value: ${ring?.value ?? 0}; --ring-color: ${ring?.color ?? "var(--primary-color)"}">
                     <div>
                         ${
@@ -480,7 +646,7 @@ export class MowerStatusCard extends LitElement {
                   ? null
                   : this.lastMowedText();
         return html`
-            <div class="picture-top">
+            <div class="picture-top${this.splits.top ? " stacked" : ""}">
                 <button class="picture ${this.pictureClass()}" @click=${() => this.moreInfo(this.config!.entity)}>
                     <img src=${this.picture!} alt=${this.name()} @load=${this.pictureLoaded} @error=${this.pictureFailed} />
                 </button>
@@ -519,11 +685,11 @@ export class MowerStatusCard extends LitElement {
     }
 
     private footer(): TemplateResult {
-        return html`<div class="footer">
+        return html`<div class="footer${this.splits.footer ? " stacked" : ""}">
             <button class="footer-name" @click=${() => this.moreInfo(this.config!.entity)}>${this.name()}</button>
             ${
                 this.slotState("mileage") && this.activity !== "mowing"
-                    ? html`<span>${this.text("common.mileage", { value: this.format("mileage") })}</span>`
+                    ? html`<span class="footer-distance">${this.text("common.mileage", { value: this.format("mileage") })}</span>`
                     : nothing
             }
         </div>`;
@@ -628,7 +794,7 @@ export class MowerStatusCard extends LitElement {
             start: { icon: "mdi:play", enabled: !!(features & FEATURE_START_MOWING) },
         }[main];
         return html`
-            <div class="buttons">
+            <div class="buttons${this.splits.buttons ? " split" : ""}">
                 <button class="button main ${main}" ?disabled=${unavailable || !mainParts.enabled} @click=${() => this.main(main)}>
                     <ha-icon icon=${mainParts.icon}></ha-icon>${this.text(this.mainLabel(main))}
                 </button>
@@ -943,9 +1109,11 @@ export class MowerStatusCard extends LitElement {
             return null;
         }
         const total = Math.round(minutes);
-        return total < 60
-            ? this.text("duration.minutes", { minutes: String(total) })
-            : this.text("duration.hours", { hours: String(Math.floor(total / 60)), minutes: String(total % 60) });
+        return withUnit(
+            total < 60
+                ? this.text("duration.minutes", { minutes: String(total) })
+                : this.text("duration.hours", { hours: String(Math.floor(total / 60)), minutes: String(total % 60) }),
+        );
     }
 
     /** The mower's state in words, with a note on charging unless left out. */
@@ -1007,7 +1175,7 @@ export class MowerStatusCard extends LitElement {
 
     /** A slot's state with its unit, in the user's number format. */
     private format(slot: Slot): string {
-        return this.hass!.formatEntityState(this.slotState(slot)!);
+        return withUnit(this.hass!.formatEntityState(this.slotState(slot)!));
     }
 
     private name(): string {
@@ -1123,10 +1291,11 @@ export class MowerStatusCard extends LitElement {
                 }
 
                 /* The gauge layout. */
+                /* The row gap is the stacked layout's, so either gap measures the same stacked or not. */
                 .gauge-top {
                     flex: none;
                     display: flex;
-                    gap: 14px;
+                    gap: 10px 14px;
                     align-items: center;
                 }
 
@@ -1309,7 +1478,7 @@ export class MowerStatusCard extends LitElement {
                 .footer {
                     flex: none;
                     display: flex;
-                    gap: 8px;
+                    gap: 2px 8px;
                     margin-top: 12px;
                     font-size: 12px;
                     color: var(--secondary-text-color);
@@ -1464,20 +1633,56 @@ export class MowerStatusCard extends LitElement {
                     cursor: default;
                 }
 
-                /* A narrow card: smaller ring and picture, so the texts keep their room, and the main button on a row of its own. */
+                /* The main button on a row of its own when its longest label doesn't fit beside the icon buttons, as measured. */
+                .buttons.split {
+                    flex-wrap: wrap;
+                }
+
+                .buttons.split .button.main {
+                    flex-basis: 100%;
+                }
+
+                .buttons.split .button.icon {
+                    flex: 1;
+                }
+
+                /* The ring or the picture above the texts when a word of theirs would break beside it or they would be taller
+                   there, as measured, and in a held card in the very narrow layout. */
+                .gauge-top.stacked {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+
+                /* The texts as wide as the card, so a held one is cut at its edge rather than running past it. */
+                .gauge-top.stacked .info {
+                    align-self: stretch;
+                }
+
+                .picture-top.stacked {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+
+                /* The distance under the name when the name's longest word doesn't fit beside it or the name would be taller
+                   there, as measured. */
+                .footer.stacked {
+                    flex-direction: column;
+                }
+
+                /* Measuring: each text at its longest word, never broken inside one, and the distance whole on one line. */
+                ha-card.measuring :is(.name, .state, .lines > div > span, .big-state, .sub .text, .below, .footer-name) {
+                    flex: none;
+                    width: min-content;
+                    overflow-wrap: normal;
+                    hyphens: manual;
+                }
+
+                ha-card.measuring .footer-distance {
+                    flex: none;
+                    width: max-content;
+                }
+
+                /* A narrow card: smaller ring and picture, so the texts keep their room. */
                 @container (max-width: 300px) {
-                    .buttons {
-                        flex-wrap: wrap;
-                    }
-
-                    .button.main {
-                        flex-basis: 100%;
-                    }
-
-                    .button.icon {
-                        flex: 1;
-                    }
-
                     .ring {
                         --size: 76px;
                     }
@@ -1510,29 +1715,8 @@ export class MowerStatusCard extends LitElement {
                     }
                 }
 
-                /* A very narrow card, a half of a phone's section: the ring or the picture on top, the texts below it at full width. */
+                /* A very narrow card, a half of a phone's section: the main button without its icon. */
                 @container (max-width: 220px) {
-                    .gauge-top {
-                        flex-direction: column;
-                        align-items: flex-start;
-                        gap: 10px;
-                    }
-
-                    /* The texts as wide as the card, so a held one is cut at its edge rather than running past it. */
-                    .gauge-top .info {
-                        align-self: stretch;
-                    }
-
-                    .picture-top {
-                        grid-template-columns: minmax(0, 1fr);
-                    }
-
-                    /* Too narrow for the name and the distance side by side without breaking the name inside its words. */
-                    .footer {
-                        flex-direction: column;
-                        gap: 2px;
-                    }
-
                     .button.main ha-icon {
                         display: none;
                     }

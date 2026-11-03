@@ -1414,6 +1414,20 @@ var ScrollFade = class {
   }
 };
 
+// src/fit.ts
+var ICON_BUTTON_PX = 46;
+var BUTTON_GAP_PX = 8;
+var SLACK_PX = 0.01;
+function buttonsFit(width, fixed, label, iconButtons) {
+  return fixed + label + iconButtons * (ICON_BUTTON_PX + BUTTON_GAP_PX) <= width + SLACK_PX;
+}
+function besideFits(room, needs) {
+  return needs.every((need) => need <= room + SLACK_PX);
+}
+function besideNoTaller(beside, stacked) {
+  return beside <= stacked + SLACK_PX;
+}
+
 // src/mower.ts
 var TASK_STATES = /* @__PURE__ */ new Set(["mowing", "paused", "returning", "error"]);
 var EMPTY = /* @__PURE__ */ new Set(["", "unknown", "unavailable", "none", "null"]);
@@ -1605,6 +1619,28 @@ function storedDismissal(entityId) {
   }
 }
 var HELD_MINIMUM = { picture: { wide: 246, narrow: 275, veryNarrow: 351 }, gauge: { wide: 216, narrow: 253, veryNarrow: 339 } };
+var BUTTON_ROW_PX = 52;
+var MAIN_ICON_PX = 20;
+var TOP_TEXTS = ".name, .state, .lines > div > span, .big-state, .sub .text, .below";
+function drawnScale(card) {
+  const layout = px(getComputedStyle(card).width);
+  const drawn = card.getBoundingClientRect().width;
+  return layout > 0 && drawn > 0 ? drawn / layout : 1;
+}
+function withUnit(text) {
+  return text.replace(/(\d) (?=\S)/g, "$1\xA0");
+}
+function heightAt(element, width) {
+  element.style.flex = "none";
+  element.style.width = `${width}px`;
+  const height = px(getComputedStyle(element).height);
+  element.style.flex = "";
+  element.style.width = "";
+  return height;
+}
+function px(value) {
+  return Number.parseFloat(value) || 0;
+}
 var MowerStatusCard = class extends i4 {
   constructor() {
     super();
@@ -1622,6 +1658,7 @@ var MowerStatusCard = class extends i4 {
     this.seenNotices = /* @__PURE__ */ new Set();
     this.filled = 0;
     this.spare = 0;
+    this.splits = { buttons: false, top: false, footer: false };
     this.resizes = typeof ResizeObserver === "undefined" ? void 0 : new ResizeObserver(() => this.fillRowsSoon());
     /** A picture of the mower's own that is transparent at its corners, a cut-out, gets the same frame as a model picture. */
     this.pictureLoaded = (event) => {
@@ -1686,12 +1723,14 @@ var MowerStatusCard = class extends i4 {
    * drawn: a whole section counts as the narrow layout, 11 columns or fewer as the very narrow one. The width covers
    * what they don't promise, such as a card inside another card, whose config has no columns of its own. Whether a
    * picture is found is known only from the data, so unless the configuration turns the picture off, the minimum is
-   * the picture layout's, the taller.
+   * the picture layout's, the taller. A wide card whose longest label puts the main button on a row of its own, as a
+   * larger font may, gets that row on top.
    */
   minimumHeight() {
     const sizes = this.config?.show_image === false ? HELD_MINIMUM.gauge : HELD_MINIMUM.picture;
     const byColumns = sizes[this.columns() <= 11 ? "veryNarrow" : "narrow"];
-    return Math.max(byColumns, this.widthClass ? sizes[this.widthClass] : 0);
+    const byWidth = this.widthClass ? sizes[this.widthClass] + (this.widthClass === "wide" && this.splits.buttons ? BUTTON_ROW_PX : 0) : 0;
+    return Math.max(byColumns, byWidth);
   }
   /**
    * Keeps the layout the card's content width gives it, read in the frame that measures its rows, never in the
@@ -1738,8 +1777,104 @@ var MowerStatusCard = class extends i4 {
     cancelAnimationFrame(this.frame ?? 0);
     this.frame = requestAnimationFrame(() => {
       this.measureWidth();
+      this.measureSplits();
       this.fillRows();
     });
+  }
+  /**
+   * Puts on a line of its own only what doesn't fit beside the rest. The main button goes on a row of its own when the
+   * longest label the mower can show wouldn't fit whole beside the icon buttons, so the row doesn't change with the
+   * mower's state. Unheld, the ring or the picture goes above the texts, and the distance under the name, when a word
+   * would break beside them or the texts would be taller there than with them moved out. Held, the texts are cut short
+   * on one line, so no word can tell: they are stacked in the very narrow layout, which the held minimum is measured
+   * for, so that a long name never needs more height than the card's columns promise.
+   */
+  measureSplits() {
+    const card = this.renderRoot.querySelector("ha-card");
+    if (!card?.clientWidth) return;
+    const scale = drawnScale(card);
+    const held = !!this.heightStyle();
+    const veryNarrow = this.widthClass === "veryNarrow";
+    const texts = held ? { top: veryNarrow, footer: veryNarrow } : this.measureTexts(card, scale);
+    const next = { buttons: this.measureButtons(card, scale), ...texts };
+    if (next.buttons !== this.splits.buttons || next.top !== this.splits.top || next.footer !== this.splits.footer) {
+      this.splits = next;
+    }
+  }
+  /** Whether the main button needs a row of its own for the longest label the mower can show, measured in its font. */
+  measureButtons(card, scale) {
+    const row = card.querySelector(".buttons");
+    const main = row?.querySelector(".button.main");
+    const mower = this.hass?.states[this.config?.entity ?? ""];
+    this.labels ?? (this.labels = document.createElement("canvas").getContext("2d") ?? void 0);
+    const context = this.labels;
+    const width = row ? row.getBoundingClientRect().width / scale : 0;
+    if (!main || !mower || !context || !width) return this.splits.buttons;
+    const style = getComputedStyle(main);
+    const fixed = px(style.paddingLeft) + px(style.paddingRight) + MAIN_ICON_PX + px(style.columnGap);
+    context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+    context.letterSpacing = style.letterSpacing === "normal" ? "0px" : style.letterSpacing;
+    const features = Number(mower.attributes.supported_features ?? 0);
+    const actions = [mainAction("mowing", features), "continue", "start"];
+    return actions.some(
+      (action) => !buttonsFit(width, fixed, context.measureText(this.text(this.mainLabel(action))).width, this.iconButtons(features, action))
+    );
+  }
+  /**
+   * Whether the ring or the picture, and the footer's distance, are to go on a line of their own: when a word of the
+   * texts beside them would break there, or the texts beside them would be taller than with the part moved out. The
+   * words are measured with each text at its min-content width, its longest word, and the distance at its whole width.
+   * The heights are then measured with the texts laid out as they wrap, at the room beside the part and at the whole
+   * width. The top and the footer are held to their drawn heights meanwhile, so nothing around them moves. The room
+   * beside the ring or picture is the same stacked or not, as are the gaps and where a text starts on its line after an
+   * icon, so the measure never depends on what it decides.
+   */
+  measureTexts(card, scale) {
+    const top = card.querySelector(".gauge-top, .picture-top");
+    const footer = card.querySelector(".footer");
+    const width = (element) => element.getBoundingClientRect().width / scale;
+    const parts = [top, footer].filter((part) => !!part && width(part) > 0);
+    if (!parts.length) return { top: this.splits.top, footer: this.splits.footer };
+    const heights = parts.map((part) => getComputedStyle(part).height);
+    parts.forEach((part, index) => part.style.height = heights[index]);
+    const needs = (texts) => texts.map((text) => {
+      const line = (text.closest(".lines > div, .sub > span") ?? text.parentElement).getBoundingClientRect();
+      const box = text.getBoundingClientRect();
+      const start = getComputedStyle(text).direction === "rtl" ? line.right - box.right : box.left - line.left;
+      return (start + box.width) / scale;
+    });
+    const result = { top: this.splits.top, footer: this.splits.footer };
+    const side = top?.querySelector(".ring, .picture");
+    const info = top?.querySelector(".info");
+    const name = footer?.querySelector(".footer-name");
+    const distance = footer?.querySelector(".footer-distance");
+    const topRoom = top ? width(top) - (side ? px(getComputedStyle(side).width) : 0) - px(getComputedStyle(top).columnGap) : 0;
+    card.classList.add("measuring");
+    const topWords = top && parts.includes(top) ? besideFits(topRoom, needs([...top.querySelectorAll(TOP_TEXTS)])) : void 0;
+    const distanceWidth = distance ? width(distance) : 0;
+    const distanceHeight = distance ? px(getComputedStyle(distance).height) : 0;
+    const nameRoom = footer ? width(footer) - (distance ? distanceWidth + px(getComputedStyle(footer).columnGap) : 0) : 0;
+    const nameWords = footer && parts.includes(footer) ? besideFits(nameRoom, needs(name ? [name] : [])) : void 0;
+    card.classList.remove("measuring");
+    if (top && info && topWords !== void 0) {
+      const sideHeight = side ? px(getComputedStyle(side).height) : 0;
+      const beside = Math.max(sideHeight, heightAt(info, topRoom));
+      const stacked = sideHeight + px(getComputedStyle(top).rowGap) + heightAt(info, width(top));
+      result.top = !topWords || !besideNoTaller(beside, stacked);
+    }
+    if (footer && name && nameWords !== void 0) {
+      const beside = distance ? Math.max(distanceHeight, heightAt(name, nameRoom)) : 0;
+      const stacked = distance ? heightAt(name, width(footer)) + px(getComputedStyle(footer).rowGap) + distanceHeight : 0;
+      result.footer = !nameWords || !besideNoTaller(beside, stacked);
+    }
+    parts.forEach((part) => part.style.height = "");
+    return result;
+  }
+  /** How many icon buttons are beside the main button: Cancel or Stop, and Dock unless the main button docks. */
+  iconButtons(features, action) {
+    const stop = this.config?.show_cancel !== false && (!!this.slots.cancel || !!(features & FEATURE_STOP));
+    const dock = !!(features & FEATURE_DOCK) && action !== "dock";
+    return Number(stop) + Number(dock);
   }
   /**
    * On automatic rows in a sections view, the card takes the whole rows its content needs, or the half rows with
@@ -1856,7 +1991,7 @@ var MowerStatusCard = class extends i4 {
       color: this.activity === "mowing" ? "var(--success-color, #4caf50)" : "var(--primary-color)"
     } : battery !== null ? { value: battery, label: this.text("common.battery"), color: this.batteryColor(battery) } : null;
     return b2`
-            <div class="gauge-top">
+            <div class="gauge-top${this.splits.top ? " stacked" : ""}">
                 <div class="ring" style="--value: ${ring?.value ?? 0}; --ring-color: ${ring?.color ?? "var(--primary-color)"}">
                     <div>
                         ${ring ? b2`<b>${this.percent(ring.value)}</b><span>${ring.label}</span>` : b2`<ha-icon icon="mdi:robot-mower"></ha-icon>`}
@@ -1915,7 +2050,7 @@ var MowerStatusCard = class extends i4 {
     const elapsed = this.duration(minutesOf(this.slotState("elapsed")));
     const below = progress !== null ? elapsed && this.activity === "mowing" ? this.text("common.progress_elapsed", { progress: this.percent(progress), elapsed }) : this.text("common.progress_done", { progress: this.percent(progress) }) : task ? null : this.lastMowedText();
     return b2`
-            <div class="picture-top">
+            <div class="picture-top${this.splits.top ? " stacked" : ""}">
                 <button class="picture ${this.pictureClass()}" @click=${() => this.moreInfo(this.config.entity)}>
                     <img src=${this.picture} alt=${this.name()} @load=${this.pictureLoaded} @error=${this.pictureFailed} />
                 </button>
@@ -1941,9 +2076,9 @@ var MowerStatusCard = class extends i4 {
         `;
   }
   footer() {
-    return b2`<div class="footer">
+    return b2`<div class="footer${this.splits.footer ? " stacked" : ""}">
             <button class="footer-name" @click=${() => this.moreInfo(this.config.entity)}>${this.name()}</button>
-            ${this.slotState("mileage") && this.activity !== "mowing" ? b2`<span>${this.text("common.mileage", { value: this.format("mileage") })}</span>` : A}
+            ${this.slotState("mileage") && this.activity !== "mowing" ? b2`<span class="footer-distance">${this.text("common.mileage", { value: this.format("mileage") })}</span>` : A}
         </div>`;
   }
   /** What is wrong, as chips. The selected one's text opens under them; selecting it again closes it. */
@@ -2029,7 +2164,7 @@ var MowerStatusCard = class extends i4 {
       start: { icon: "mdi:play", enabled: !!(features & FEATURE_START_MOWING) }
     }[main];
     return b2`
-            <div class="buttons">
+            <div class="buttons${this.splits.buttons ? " split" : ""}">
                 <button class="button main ${main}" ?disabled=${unavailable || !mainParts.enabled} @click=${() => this.main(main)}>
                     <ha-icon icon=${mainParts.icon}></ha-icon>${this.text(this.mainLabel(main))}
                 </button>
@@ -2265,7 +2400,9 @@ var MowerStatusCard = class extends i4 {
       return null;
     }
     const total = Math.round(minutes);
-    return total < 60 ? this.text("duration.minutes", { minutes: String(total) }) : this.text("duration.hours", { hours: String(Math.floor(total / 60)), minutes: String(total % 60) });
+    return withUnit(
+      total < 60 ? this.text("duration.minutes", { minutes: String(total) }) : this.text("duration.hours", { hours: String(Math.floor(total / 60)), minutes: String(total % 60) })
+    );
   }
   /** The mower's state in words, with a note on charging unless left out. */
   stateText(mower, withCharging = true) {
@@ -2312,7 +2449,7 @@ var MowerStatusCard = class extends i4 {
   }
   /** A slot's state with its unit, in the user's number format. */
   format(slot) {
-    return this.hass.formatEntityState(this.slotState(slot));
+    return withUnit(this.hass.formatEntityState(this.slotState(slot)));
   }
   name() {
     const device = this.device();
@@ -2411,10 +2548,11 @@ var MowerStatusCard = class extends i4 {
                 }
 
                 /* The gauge layout. */
+                /* The row gap is the stacked layout's, so either gap measures the same stacked or not. */
                 .gauge-top {
                     flex: none;
                     display: flex;
-                    gap: 14px;
+                    gap: 10px 14px;
                     align-items: center;
                 }
 
@@ -2597,7 +2735,7 @@ var MowerStatusCard = class extends i4 {
                 .footer {
                     flex: none;
                     display: flex;
-                    gap: 8px;
+                    gap: 2px 8px;
                     margin-top: 12px;
                     font-size: 12px;
                     color: var(--secondary-text-color);
@@ -2752,20 +2890,56 @@ var MowerStatusCard = class extends i4 {
                     cursor: default;
                 }
 
-                /* A narrow card: smaller ring and picture, so the texts keep their room, and the main button on a row of its own. */
+                /* The main button on a row of its own when its longest label doesn't fit beside the icon buttons, as measured. */
+                .buttons.split {
+                    flex-wrap: wrap;
+                }
+
+                .buttons.split .button.main {
+                    flex-basis: 100%;
+                }
+
+                .buttons.split .button.icon {
+                    flex: 1;
+                }
+
+                /* The ring or the picture above the texts when a word of theirs would break beside it or they would be taller
+                   there, as measured, and in a held card in the very narrow layout. */
+                .gauge-top.stacked {
+                    flex-direction: column;
+                    align-items: flex-start;
+                }
+
+                /* The texts as wide as the card, so a held one is cut at its edge rather than running past it. */
+                .gauge-top.stacked .info {
+                    align-self: stretch;
+                }
+
+                .picture-top.stacked {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+
+                /* The distance under the name when the name's longest word doesn't fit beside it or the name would be taller
+                   there, as measured. */
+                .footer.stacked {
+                    flex-direction: column;
+                }
+
+                /* Measuring: each text at its longest word, never broken inside one, and the distance whole on one line. */
+                ha-card.measuring :is(.name, .state, .lines > div > span, .big-state, .sub .text, .below, .footer-name) {
+                    flex: none;
+                    width: min-content;
+                    overflow-wrap: normal;
+                    hyphens: manual;
+                }
+
+                ha-card.measuring .footer-distance {
+                    flex: none;
+                    width: max-content;
+                }
+
+                /* A narrow card: smaller ring and picture, so the texts keep their room. */
                 @container (max-width: 300px) {
-                    .buttons {
-                        flex-wrap: wrap;
-                    }
-
-                    .button.main {
-                        flex-basis: 100%;
-                    }
-
-                    .button.icon {
-                        flex: 1;
-                    }
-
                     .ring {
                         --size: 76px;
                     }
@@ -2798,29 +2972,8 @@ var MowerStatusCard = class extends i4 {
                     }
                 }
 
-                /* A very narrow card, a half of a phone's section: the ring or the picture on top, the texts below it at full width. */
+                /* A very narrow card, a half of a phone's section: the main button without its icon. */
                 @container (max-width: 220px) {
-                    .gauge-top {
-                        flex-direction: column;
-                        align-items: flex-start;
-                        gap: 10px;
-                    }
-
-                    /* The texts as wide as the card, so a held one is cut at its edge rather than running past it. */
-                    .gauge-top .info {
-                        align-self: stretch;
-                    }
-
-                    .picture-top {
-                        grid-template-columns: minmax(0, 1fr);
-                    }
-
-                    /* Too narrow for the name and the distance side by side without breaking the name inside its words. */
-                    .footer {
-                        flex-direction: column;
-                        gap: 2px;
-                    }
-
                     .button.main ha-icon {
                         display: none;
                     }
@@ -2866,6 +3019,9 @@ __decorateClass([
 __decorateClass([
   r5()
 ], MowerStatusCard.prototype, "widthClass", 2);
+__decorateClass([
+  r5()
+], MowerStatusCard.prototype, "splits", 2);
 MowerStatusCard = __decorateClass([
   t3("mower-status-card")
 ], MowerStatusCard);
@@ -2903,5 +3059,6 @@ function hasTransparentCorners(img) {
   }
 }
 export {
-  MowerStatusCard
+  MowerStatusCard,
+  withUnit
 };

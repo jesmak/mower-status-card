@@ -154,10 +154,12 @@ Clicking the mower's name or picture opens its entity.
 
 ## Sizes
 
-In a sections view the card takes a whole section by default and can be made as narrow as half of one. On a narrow
-card the large button takes a row of its own, and on a very narrow one, such as half of a phone's section, the ring or
-the picture moves above the texts. A day and a time are never broken apart from their own words, so "Last mowed" wraps
-before "Wed, 10/14 at 3:18 PM" does.
+In a sections view the card takes a whole section by default and can be made as narrow as half of one. A part goes to a
+line of its own only when it doesn't fit, never at a fixed width. The large button takes a row of its own when the
+longest label it can show doesn't fit beside cancel and dock, so it doesn't move when the mower's state changes. The ring
+or the picture moves above the texts, and the distance under the name, when a word beside them would break or the texts
+would be taller there than with them moved out. A day and a time are never broken apart from their own words, so "Last
+mowed" wraps before "Wed, 10/14 at 3:18 PM" does, and a number stays on the line of its unit.
 
 On automatic rows in a sections view, a card that `height_mode` doesn't keep to `height` or `max_height` ends on a
 whole row, so the cards under it stay on the rows, or with `row_step: half` on a half row. The space that takes goes
@@ -165,7 +167,9 @@ between the mower's status and the notices, which keeps the buttons and the name
 card.
 
 A card held to a height, by `height_mode` or by rows set in the layout tab, keeps every text of the mower's status to
-one line, cut short with an ellipsis when it is longer. It is never held lower than its status, its buttons and the name
+one line, cut short with an ellipsis when it is longer. As no word then tells whether they fit, a held card up to 250 px
+wide has the ring or the picture above the texts and the distance under the name, and a wider one beside them. It is
+never held lower than its status, its buttons and the name
 under a picture need at the narrowest its columns can be, which is 5 rows for a whole section and 6 for 11 columns or
 fewer. A height set by `height_mode` is also raised to what the card's own width needs, so a card inside another card
 fits too. A section's background or a theme can make a card narrower than its columns promise, and then rows set in the
@@ -174,8 +178,8 @@ layout tab may need raising by hand.
 <p>
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/narrow-light.png#gh-light-mode-only" width="270" alt="A narrow card, the ring beside the texts and the large button on a row of its own above cancel and dock">
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/narrow-dark.png#gh-dark-mode-only" width="270" alt="A narrow card, the ring beside the texts and the large button on a row of its own above cancel and dock">
-<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/very-narrow-light.png#gh-light-mode-only" width="210" alt="A very narrow card, the ring above the name, state and times, and the buttons below">
-<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/very-narrow-dark.png#gh-dark-mode-only" width="210" alt="A very narrow card, the ring above the name, state and times, and the buttons below">
+<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/very-narrow-light.png#gh-light-mode-only" width="210" alt="A very narrow card, the ring beside the name, state and times, which wrap to the room beside it, and the buttons below">
+<img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/very-narrow-dark.png#gh-dark-mode-only" width="210" alt="A very narrow card, the ring beside the name, state and times, which wrap to the room beside it, and the buttons below">
 </p>
 
 ## Examples
