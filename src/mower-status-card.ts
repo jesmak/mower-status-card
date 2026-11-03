@@ -392,8 +392,7 @@ export class MowerStatusCard extends LitElement {
             texts.map((text) => {
                 const line = (text.closest(".lines > div, .sub > span") ?? text.parentElement)!.getBoundingClientRect();
                 const box = text.getBoundingClientRect();
-                const start = getComputedStyle(text).direction === "rtl" ? line.right - box.right : box.left - line.left;
-                return (start + box.width) / scale;
+                return (box.left - line.left + box.width) / scale;
             });
         const result = { top: this.splits.top, footer: this.splits.footer };
         const side = top?.querySelector<HTMLElement>(".ring, .picture");
