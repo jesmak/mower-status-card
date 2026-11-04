@@ -3,7 +3,7 @@
 Home Assistant dashboard card for a robotic lawn mower, with its state, battery and the task under way, what is wrong
 with it, and its buttons.
 
-[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![HACS][hacs-shield]][hacs] [![License][license-shield]](LICENSE)
+[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
 
 <p>
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/mowing-light.png#gh-light-mode-only" width="400" alt="A mower mowing, a ring with the task 46% done, the time left, the battery and the time elapsed beside it, and a large pause button">
@@ -30,10 +30,11 @@ works alongside a map of the mower, such as [ha-map-card](https://github.com/nat
 
 ## Installation
 
-### With HACS
+### With the Marketplace
 
-1. Search for Mower status card in HACS and download it
-2. Refresh your browser
+1. Open Settings › Marketplace and search for Mower status card
+2. Open it and choose Install
+3. Refresh your browser
 
 ### Manual
 
@@ -255,7 +256,7 @@ npm run check
 ```
 
 `npm run check` typechecks, lints, checks formatting, runs the tests and builds `dist/mower-status-card.js`, which is
-the file HACS installs and is committed to the repository.
+the file the Marketplace installs and is committed to the repository.
 
 | Path                       | What it contains                                                              |
 | -------------------------- | ----------------------------------------------------------------------------- |
@@ -285,6 +286,6 @@ MIT, see [LICENSE](LICENSE). The photo of a mower in the screenshots is CC0, see
 [releases-shield]: https://img.shields.io/github/release/jesmak/mower-status-card.svg?style=for-the-badge
 [release-date-shield]: https://img.shields.io/github/release-date/jesmak/mower-status-card?style=for-the-badge
 [releases]: https://github.com/jesmak/mower-status-card/releases
-[hacs-shield]: https://img.shields.io/badge/HACS-Default-green.svg?style=for-the-badge
-[hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=jesmak&repository=mower-status-card&category=plugin
+[marketplace-shield]: https://img.shields.io/badge/Marketplace-Default-green.svg?style=for-the-badge
+[marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=jesmak&repository=mower-status-card&category=plugin
 [license-shield]: https://img.shields.io/github/license/jesmak/mower-status-card.svg?style=for-the-badge
