@@ -729,6 +729,14 @@ describe("mower-status-card", () => {
         expect(text(root(element).querySelector(".state"))).toBe("docked, lataa");
     });
 
+    it("names a mower without a device as Home Assistant composes its name, or by its friendly name before that", async () => {
+        const state = mockHass({ "lawn_mower.matti": { attributes: { friendly_name: "Old Matti", supported_features: 15 } } });
+        state.devices = {};
+        expect(text(root(await card(state)).querySelector(".name"))).toBe("Old Matti");
+        state.formatEntityName = () => "Matti";
+        expect(text(root(await card(state)).querySelector(".name"))).toBe("Matti");
+    });
+
     it("shows the task's progress and time left while mowing, with pause leading", async () => {
         const element = await card(
             mockHass({

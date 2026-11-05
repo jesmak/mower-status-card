@@ -1199,11 +1199,13 @@ export class MowerStatusCard extends LitElement {
 
     private name(): string {
         const device = this.device();
+        const state = this.hass?.states[this.config!.entity];
         return (
             this.config?.name ||
             device?.name_by_user ||
             device?.name ||
-            String(this.hass?.states[this.config!.entity]?.attributes.friendly_name ?? this.config!.entity)
+            (state && this.hass?.formatEntityName?.(state, [{ type: "device" }, { type: "entity" }])) ||
+            String(state?.attributes.friendly_name ?? this.config!.entity)
         );
     }
 

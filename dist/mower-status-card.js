@@ -2436,7 +2436,8 @@ var MowerStatusCard = class extends i4 {
   }
   name() {
     const device = this.device();
-    return this.config?.name || device?.name_by_user || device?.name || String(this.hass?.states[this.config.entity]?.attributes.friendly_name ?? this.config.entity);
+    const state = this.hass?.states[this.config.entity];
+    return this.config?.name || device?.name_by_user || device?.name || state && this.hass?.formatEntityName?.(state, [{ type: "device" }, { type: "entity" }]) || String(state?.attributes.friendly_name ?? this.config.entity);
   }
   device() {
     const deviceId = this.hass?.entities?.[this.config.entity]?.device_id;
