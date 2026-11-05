@@ -24,7 +24,7 @@ import { ScrollFade, fadeStyles } from "./fade";
 import { besideFits, besideNoTaller, buttonsFit } from "./fit";
 import type { HassEntity, HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
-import { fillLimit, filledHeight, filledStyle, validRowStep } from "./rows";
+import { drawnScale, fillLimit, filledHeight, filledStyle, spareRoom, validRowStep } from "./rows";
 import { browserLanguage, translate, translateOwn } from "./localize/localize";
 import { hasTask, lastMowingEnd, lastMowingStart, mainAction, mammotionPictures, minutesOf, notices, numberOf } from "./mower";
 import type { MainAction } from "./mower";
@@ -123,16 +123,6 @@ interface Splits {
     top: boolean;
     /** The distance under the name. */
     footer: boolean;
-}
-
-/**
- * How much the card is drawn scaled, 1 unless something scales it, such as a dialog's opening animation (0.8 to 1).
- * Drawn widths are scaled while computed styles are not, so drawn measures are divided by it.
- */
-function drawnScale(card: HTMLElement): number {
-    const layout = px(getComputedStyle(card).width);
-    const drawn = card.getBoundingClientRect().width;
-    return layout > 0 && drawn > 0 ? drawn / layout : 1;
 }
 
 /**
@@ -457,26 +447,27 @@ export class MowerStatusCard extends LitElement {
             if (this.spare) this.spare = 0;
             return;
         }
+        // Drawn distances are unscaled, as the paddings, borders and margins added to them are the layout's.
+        const scale = drawnScale(card);
         const cardStyle = getComputedStyle(card);
         const notices = this.renderRoot.querySelector<HTMLElement>(".notices");
         const content =
-            last.getBoundingClientRect().bottom -
-            card.getBoundingClientRect().top +
-            (parseFloat(cardStyle.paddingBottom) || 0) +
-            (parseFloat(cardStyle.borderBottomWidth) || 0) -
-            (notices ? Math.max(0, parseFloat(getComputedStyle(notices).marginTop) || 0) : 0);
+            (last.getBoundingClientRect().bottom - card.getBoundingClientRect().top) / scale +
+            px(cardStyle.paddingBottom) +
+            px(cardStyle.borderBottomWidth) -
+            (notices ? Math.max(0, px(getComputedStyle(notices).marginTop)) : 0);
         let grown = 0;
         if (notices) {
             const box = notices.getBoundingClientRect();
             const style = getComputedStyle(notices);
             const lastNotice = notices.lastElementChild;
-            const end = lastNotice
-                ? lastNotice.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(lastNotice).marginBottom) || 0)
-                : box.top + (parseFloat(style.paddingTop) || 0);
-            grown = Math.max(0, box.bottom - end - (parseFloat(style.paddingBottom) || 0));
+            const room = lastNotice
+                ? (box.bottom - lastNotice.getBoundingClientRect().bottom) / scale - px(getComputedStyle(lastNotice).marginBottom)
+                : box.height / scale - px(style.paddingTop);
+            grown = Math.max(0, room - px(style.paddingBottom));
         }
-        const filled = filledHeight(Math.round(content - grown), this.config ?? {}, limit);
-        const spare = notices ? Math.max(0, Math.floor(filled - (content - grown))) : 0;
+        const filled = filledHeight(content - grown, this.config ?? {}, limit);
+        const spare = notices ? spareRoom(filled, content - grown) : 0;
         if (filled !== this.filled) this.filled = filled;
         if (spare !== this.spare) this.spare = spare;
     }

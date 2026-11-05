@@ -247,6 +247,53 @@ describe("mower-status-card", () => {
         expect(haCard.getAttribute("style")).toBe("min-height: 248px; --mower-spare: 40px");
     });
 
+    it("takes the next row for a content a fraction of a pixel over one", async () => {
+        const element = await card(mockHass(), {}, "grid");
+        // The buttons end at 105.4 px, so the content is 120.4 px, which no longer fits two rows' 120.
+        const haCard = laidOut(element, 120, 115, null, 105.4);
+        fillRows(element);
+        await element.updateComplete;
+        expect(heightOf(haCard)).toBe("min-height: 184px");
+    });
+
+    it("measures a card drawn scaled, as a dialog opening draws it, in the layout's pixels", async () => {
+        const element = await card(mockHass(), {}, "grid");
+        // Drawn at 0.8: the card 386.4 px wide for its 483, its buttons ending at 0.8 × 193 px.
+        const haCard = laidOut(element, 208 * 0.8, 115, null, 193 * 0.8);
+        haCard.getBoundingClientRect = () => ({ top: 0, bottom: 208 * 0.8, height: 208 * 0.8, width: 386.4 }) as DOMRect;
+        const cardStyle = { width: "483px", paddingLeft: "14px", paddingRight: "14px", paddingBottom: "14px", borderBottomWidth: "1px" };
+        vi.mocked(window.getComputedStyle).mockImplementation(
+            (target) =>
+                (target === haCard
+                    ? cardStyle
+                    : { paddingTop: "0px", paddingBottom: "4px", marginBottom: "0px" }) as unknown as CSSStyleDeclaration,
+        );
+        fillRows(element);
+        await element.updateComplete;
+        expect(heightOf(haCard)).toBe("min-height: 248px");
+    });
+
+    it("measures the room its notices have grown past their content in the layout's pixels when drawn scaled", async () => {
+        const element = await card(mockHass(), {}, "grid");
+        // 600 px tall with its notices from 111 px down to 507, their last element ending at 115: 388 px grown, which
+        // leaves 212 px of content, two rows' 248 and not the 312 that the grown room measured drawn would leave.
+        const haCard = laidOut(element, 600 * 0.8, 507, 115, 585 * 0.8);
+        haCard.getBoundingClientRect = () => ({ top: 0, bottom: 480, height: 480, width: 386.4 }) as DOMRect;
+        const notices = root(element).querySelector<HTMLElement>(".notices")!;
+        notices.getBoundingClientRect = () => ({ top: 111 * 0.8, bottom: 507 * 0.8, height: 396 * 0.8 }) as DOMRect;
+        (notices.lastElementChild as HTMLElement).getBoundingClientRect = () => ({ bottom: 115 * 0.8 }) as DOMRect;
+        const cardStyle = { width: "483px", paddingLeft: "14px", paddingRight: "14px", paddingBottom: "14px", borderBottomWidth: "1px" };
+        vi.mocked(window.getComputedStyle).mockImplementation(
+            (target) =>
+                (target === haCard
+                    ? cardStyle
+                    : { paddingTop: "0px", paddingBottom: "4px", marginBottom: "0px" }) as unknown as CSSStyleDeclaration,
+        );
+        fillRows(element);
+        await element.updateComplete;
+        expect(heightOf(haCard)).toBe("min-height: 248px");
+    });
+
     it("leaves nothing over with half rows when its content ends on a half row", async () => {
         const element = await card(mockHass(), { row_step: "half" }, "grid");
         const haCard = laidOut(element, 216, 115, null);

@@ -1,4 +1,4 @@
-/*! mower-status-card 1.2.0 | MIT License */
+/*! mower-status-card 1.2.1 | MIT License */
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __decorateClass = (decorators, target, key, kind) => {
@@ -604,7 +604,7 @@ function r5(r6) {
 }
 
 // src/const.ts
-var CARD_VERSION = "1.2.0";
+var CARD_VERSION = "1.2.1";
 var ERROR_FRESH_MS = 24 * 36e5;
 var HISTORY_DAYS = 10;
 var TICK_MS = 6e4;
@@ -655,8 +655,17 @@ function validRowStep(config) {
   return config.row_step === void 0 || config.row_step === null || ROW_STEPS.includes(config.row_step);
 }
 var step = (config) => config.row_step === "half" ? ROW_PX / 2 : ROW_PX;
+var SLACK_PX = 0.01;
+function drawnScale(card) {
+  const layout = Number.parseFloat(getComputedStyle(card).width) || 0;
+  const drawn = card.getBoundingClientRect().width;
+  return layout > 0 && drawn > 0 ? drawn / layout : 1;
+}
 function filledHeight(content, config, limit = Infinity) {
-  return Math.min(Math.max(1, Math.ceil((content + ROW_GAP_PX) / step(config))) * step(config) - ROW_GAP_PX, limit);
+  return Math.min(Math.max(1, Math.ceil((content - SLACK_PX + ROW_GAP_PX) / step(config))) * step(config) - ROW_GAP_PX, limit);
+}
+function spareRoom(filled, content) {
+  return Math.max(0, Math.floor(filled - content + SLACK_PX));
 }
 function fillLimit(config, layout, minimum = 0) {
   const rows = config.grid_options ? config.grid_options.rows : config.layout_options?.grid_rows;
@@ -1387,15 +1396,15 @@ var ScrollFade = class {
 // src/fit.ts
 var ICON_BUTTON_PX = 46;
 var BUTTON_GAP_PX = 8;
-var SLACK_PX = 0.01;
+var SLACK_PX2 = 0.01;
 function buttonsFit(width, fixed, label, iconButtons) {
-  return fixed + label + iconButtons * (ICON_BUTTON_PX + BUTTON_GAP_PX) <= width + SLACK_PX;
+  return fixed + label + iconButtons * (ICON_BUTTON_PX + BUTTON_GAP_PX) <= width + SLACK_PX2;
 }
 function besideFits(room, needs) {
-  return needs.every((need) => need <= room + SLACK_PX);
+  return needs.every((need) => need <= room + SLACK_PX2);
 }
 function besideNoTaller(beside, stacked) {
-  return beside <= stacked + SLACK_PX;
+  return beside <= stacked + SLACK_PX2;
 }
 
 // src/mower.ts
@@ -1592,11 +1601,6 @@ var HELD_MINIMUM = { picture: { wide: 246, narrow: 279, veryNarrow: 355 }, gauge
 var BUTTON_ROW_PX = 52;
 var MAIN_ICON_PX = 20;
 var TOP_TEXTS = ".name, .state, .lines > div > span, .big-state, .sub .text, .below";
-function drawnScale(card) {
-  const layout = px(getComputedStyle(card).width);
-  const drawn = card.getBoundingClientRect().width;
-  return layout > 0 && drawn > 0 ? drawn / layout : 1;
-}
 function withUnit(text) {
   return text.replace(/(\d) (?=\S)/g, "$1\xA0");
 }
@@ -1874,19 +1878,20 @@ var MowerStatusCard = class extends i4 {
       if (this.spare) this.spare = 0;
       return;
     }
+    const scale = drawnScale(card);
     const cardStyle = getComputedStyle(card);
     const notices2 = this.renderRoot.querySelector(".notices");
-    const content = last.getBoundingClientRect().bottom - card.getBoundingClientRect().top + (parseFloat(cardStyle.paddingBottom) || 0) + (parseFloat(cardStyle.borderBottomWidth) || 0) - (notices2 ? Math.max(0, parseFloat(getComputedStyle(notices2).marginTop) || 0) : 0);
+    const content = (last.getBoundingClientRect().bottom - card.getBoundingClientRect().top) / scale + px(cardStyle.paddingBottom) + px(cardStyle.borderBottomWidth) - (notices2 ? Math.max(0, px(getComputedStyle(notices2).marginTop)) : 0);
     let grown = 0;
     if (notices2) {
       const box = notices2.getBoundingClientRect();
       const style = getComputedStyle(notices2);
       const lastNotice = notices2.lastElementChild;
-      const end = lastNotice ? lastNotice.getBoundingClientRect().bottom + (parseFloat(getComputedStyle(lastNotice).marginBottom) || 0) : box.top + (parseFloat(style.paddingTop) || 0);
-      grown = Math.max(0, box.bottom - end - (parseFloat(style.paddingBottom) || 0));
+      const room = lastNotice ? (box.bottom - lastNotice.getBoundingClientRect().bottom) / scale - px(getComputedStyle(lastNotice).marginBottom) : box.height / scale - px(style.paddingTop);
+      grown = Math.max(0, room - px(style.paddingBottom));
     }
-    const filled = filledHeight(Math.round(content - grown), this.config ?? {}, limit);
-    const spare = notices2 ? Math.max(0, Math.floor(filled - (content - grown))) : 0;
+    const filled = filledHeight(content - grown, this.config ?? {}, limit);
+    const spare = notices2 ? spareRoom(filled, content - grown) : 0;
     if (filled !== this.filled) this.filled = filled;
     if (spare !== this.spare) this.spare = spare;
   }
