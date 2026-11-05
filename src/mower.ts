@@ -61,7 +61,7 @@ export function errorText(raw: string | undefined, language: string): string | n
  * When the error happened, from the integration's own time sensor, or null without one. Not from when the error's
  * text changed: Home Assistant resets that at every restart, which would make a week-old error new again.
  */
-export function errorTime(time: HassEntity | undefined): number | null {
+function errorTime(time: HassEntity | undefined): number | null {
     const reported = time && !EMPTY.has(time.state.toLowerCase()) ? Date.parse(time.state) : NaN;
     return Number.isFinite(reported) ? reported : null;
 }

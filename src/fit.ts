@@ -1,17 +1,17 @@
-/**
+/*
  * Whether a part fits where it is, from widths measured on the page in the layout's pixels. A part goes to a line of its
  * own only when it doesn't fit beside the rest, never at a fixed width.
  */
 
 /** An icon button's width, and the gap between the buttons, as the card's styles give them. */
-export const ICON_BUTTON_PX = 46;
-export const BUTTON_GAP_PX = 8;
+const ICON_BUTTON_PX = 46;
+const BUTTON_GAP_PX = 8;
 
 /**
  * Room for a measure read in fractions of a pixel, so a text exactly as wide as its room still fits, and a width
  * unscaled with floating-point noise counts as the whole pixels it is. Smaller than the 1/64 px a browser lays out in.
  */
-export const SLACK_PX = 0.01;
+const SLACK_PX = 0.01;
 
 /**
  * Whether the main button fits beside the icon buttons with its label whole on one line: `width` is the row's, `fixed`

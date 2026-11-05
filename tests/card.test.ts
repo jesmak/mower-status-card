@@ -958,7 +958,7 @@ describe("mower-status-card", () => {
     });
 
     it("keeps a dismissal to the mower it was made for", async () => {
-        localStorage.setItem("mower-status-card.dismissed.lawn_mower.pentti", String(NOW));
+        localStorage.setItem("mower-status-card.dismissed.lawn_mower.otto", String(NOW));
         const element = await card(lowBattery("docked"));
         expect(text(root(element).querySelector(".detail span"))).toBe("Tänään klo 14.00. Akku on vähissä");
     });
@@ -991,17 +991,24 @@ describe("mower-status-card", () => {
         expect(buttons(element)[2].disabled).toBe(false);
     });
 
-    it("follows the browser's clock when the profile asks for the system's", async () => {
+    it.each([
+        [true, "1.00 ip."],
+        [false, "klo 13.00"],
+    ])("follows the browser's clock when the profile asks for the system's, with hour12 %s", async (hour12, shown) => {
+        // The browser's own setting, whatever the machine running the tests uses.
+        const resolved = Intl.DateTimeFormat.prototype.resolvedOptions;
+        vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockImplementation(function (this: Intl.DateTimeFormat) {
+            return { ...resolved.call(this), hour12 };
+        });
         const state = mockHass();
         state.locale = { language: "fi", time_zone: "server", time_format: "system" };
         history(state, [
             { s: "mowing", lu: (NOW - 27 * 3_600_000) / 1000 },
             { s: "docked", lu: (NOW - 26 * 3_600_000) / 1000 },
         ]);
-        const hour12 = new Intl.DateTimeFormat(undefined, { hour: "numeric" }).resolvedOptions().hour12;
         const element = await card(state);
         await settled(element);
-        expect(text(root(element).querySelector(".lines"))).toContain(hour12 ? "1.00 ip." : "klo 13.00");
+        expect(text(root(element).querySelector(".lines"))).toContain(shown);
     });
 
     it("greys the dock button while the mower charges", async () => {

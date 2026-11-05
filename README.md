@@ -224,7 +224,7 @@ show_cancel: false
 ## Data
 
 Everything comes from the mower's entities in Home Assistant, and when it last mowed from Home Assistant's history of
-the mower, the last 10 days of it by default. A dismissed error is kept in the browser's own storage. The card fetches
+the mower, the last 10 days of it. A dismissed error is kept in the browser's own storage. The card fetches
 nothing else, apart from checking whether ha-mammotion-assets has the model's picture.
 
 The card has been tested with [Mammotion](https://github.com/mikey0000/Mammotion-HA) and

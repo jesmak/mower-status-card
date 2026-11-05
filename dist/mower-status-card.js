@@ -1705,15 +1705,17 @@ var MowerStatusCard = class extends i4 {
   /**
    * Keeps the layout the card's content width gives it, read in the frame that measures its rows, never in the
    * observer's callback: a change there would resize the card while the observer is still running. A hidden card,
-   * with no width, keeps the last.
+   * with no width, keeps the last. Returns false when the layout changed.
    */
   measureWidth() {
     const card = this.renderRoot.querySelector("ha-card");
-    if (!card?.clientWidth) return;
+    if (!card?.clientWidth) return true;
     const style = getComputedStyle(card);
     const width = card.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0);
     const widthClass = width <= 220 ? "veryNarrow" : width <= 300 ? "narrow" : "wide";
-    if (widthClass !== this.widthClass) this.widthClass = widthClass;
+    if (widthClass === this.widthClass) return true;
+    this.widthClass = widthClass;
+    return false;
   }
   /** The columns set in the layout tab, in either form Home Assistant has saved them, or a whole section. */
   columns() {
@@ -1746,9 +1748,9 @@ var MowerStatusCard = class extends i4 {
   fillRowsSoon() {
     cancelAnimationFrame(this.frame ?? 0);
     this.frame = requestAnimationFrame(() => {
-      this.measureWidth();
-      this.measureSplits();
-      this.fillRows();
+      if (this.measureWidth() && this.measureSplits()) {
+        this.fillRows();
+      }
     });
   }
   /**
@@ -1757,19 +1759,21 @@ var MowerStatusCard = class extends i4 {
    * mower's state. Unheld, the ring or the picture goes above the texts, and the distance under the name, when a word
    * would break beside them or the texts would be taller there than with them moved out. Held, the texts are cut short
    * on one line, so no word can tell: they are stacked in the very narrow layout, which the held minimum is measured
-   * for, so that a long name never needs more height than the card's columns promise.
+   * for, so that a long name never needs more height than the card's columns promise. Returns false when a split changed.
    */
   measureSplits() {
     const card = this.renderRoot.querySelector("ha-card");
-    if (!card?.clientWidth) return;
+    if (!card?.clientWidth) return true;
     const scale = drawnScale(card);
     const held = !!this.heightStyle();
     const veryNarrow = this.widthClass === "veryNarrow";
     const texts = held ? { top: veryNarrow, footer: veryNarrow } : this.measureTexts(card, scale);
     const next = { buttons: this.measureButtons(card, scale), ...texts };
-    if (next.buttons !== this.splits.buttons || next.top !== this.splits.top || next.footer !== this.splits.footer) {
-      this.splits = next;
+    if (next.buttons === this.splits.buttons && next.top === this.splits.top && next.footer === this.splits.footer) {
+      return true;
     }
+    this.splits = next;
+    return false;
   }
   /** Whether the main button needs a row of its own for the longest label the mower can show, measured in its font. */
   measureButtons(card, scale) {
@@ -2472,6 +2476,8 @@ var MowerStatusCard = class extends i4 {
                notices between them scroll. */
                 ha-card {
                     box-sizing: border-box;
+                    /* ha-card's own transition covers every property, so the card would shrink slowly to the rows it fills. */
+                    transition: none;
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
@@ -3038,6 +3044,5 @@ function hasTransparentCorners(img) {
   }
 }
 export {
-  MowerStatusCard,
-  withUnit
+  MowerStatusCard
 };

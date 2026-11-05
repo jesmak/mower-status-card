@@ -16,7 +16,7 @@ export interface EntityRegistryEntry {
     hidden?: boolean;
 }
 
-export interface DeviceRegistryEntry {
+interface DeviceRegistryEntry {
     id: string;
     /** The integration's own name for the device, such as "Yuka-MNEXAMPLE1". */
     name?: string | null;

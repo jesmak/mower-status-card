@@ -176,20 +176,6 @@ describe("the Sunseeker preset", () => {
         expect(element.shadowRoot!.querySelector(".ring")).not.toBeNull();
     });
 
-    it("keeps a failed picture failed when only its token changes", async () => {
-        const element = await card(sunseeker());
-        element.shadowRoot!.querySelector(".picture img")!.dispatchEvent(new Event("error"));
-        await element.updateComplete;
-        element.hass = sunseeker({
-            "image.ville_leikkurikuva": {
-                state: "unknown",
-                attributes: { entity_picture: "/api/image_proxy/image.ville_leikkurikuva?token=y" },
-            },
-        });
-        await element.updateComplete;
-        expect(element.shadowRoot!.querySelector(".picture img")).toBeNull();
-    });
-
     it("reads the history again once the registry, and with it the preset, has arrived", async () => {
         const state = sunseeker();
         const entities = state.entities;

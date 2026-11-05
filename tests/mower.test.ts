@@ -140,7 +140,7 @@ describe("notices", () => {
         ]);
     });
 
-    it("shows weak positioning only while there is a task", () => {
+    it("shows weak positioning only while the mower is out on a task", () => {
         const states = { ...quiet, positioning: entity("Float"), satellites: entity("12") };
         expect(notices({ states, mowerState: "mowing", now: NOW, language: "fi", format: plain })).toEqual([
             { id: "positioning", level: "amber", values: { rtk: "Float", vision: "", generic: "", satellites: "12" } },
