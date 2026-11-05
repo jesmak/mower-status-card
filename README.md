@@ -3,7 +3,7 @@
 Home Assistant dashboard card for a robotic lawn mower, with its state, battery and the task under way, what is wrong
 with it, and its buttons.
 
-[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
+[![GitHub Release][releases-shield]][releases] [![GitHub Release Date][release-date-shield]][releases] [![Downloads][downloads-shield]][releases] [![Marketplace][marketplace-shield]][marketplace] [![License][license-shield]](LICENSE)
 
 <p>
 <img src="https://raw.githubusercontent.com/jesmak/mower-status-card/main/docs/images/mowing-light.png#gh-light-mode-only" width="400" alt="A mower mowing, a ring with the task 46% done, the time left, the battery and the time elapsed beside it, and a large pause button">
@@ -286,6 +286,7 @@ MIT, see [LICENSE](LICENSE). The photo of a mower in the screenshots is CC0, see
 [releases-shield]: https://img.shields.io/github/release/jesmak/mower-status-card.svg?style=for-the-badge
 [release-date-shield]: https://img.shields.io/github/release-date/jesmak/mower-status-card?style=for-the-badge
 [releases]: https://github.com/jesmak/mower-status-card/releases
+[downloads-shield]: https://img.shields.io/github/downloads/jesmak/mower-status-card/total.svg?style=for-the-badge
 [marketplace-shield]: https://img.shields.io/badge/Marketplace-Default-green.svg?style=for-the-badge
 [marketplace]: https://my.home-assistant.io/redirect/marketplace_repository/?owner=jesmak&repository=mower-status-card&category=plugin
 [license-shield]: https://img.shields.io/github/license/jesmak/mower-status-card.svg?style=for-the-badge
