@@ -1,7 +1,12 @@
+import type { ScrollIndicator } from "./fade";
+
 /** Replaced at build time with the version in package.json. */
 declare const __CARD_VERSION__: string;
 
 export const CARD_VERSION = __CARD_VERSION__;
+
+/** A held card's notices show both their fading edges and a thin scrollbar. */
+export const DEFAULT_SCROLL_INDICATOR: ScrollIndicator = "both";
 
 /** An error is a notice for this long after it happened, and then only history. */
 export const ERROR_FRESH_MS = 24 * 3_600_000;

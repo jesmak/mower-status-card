@@ -35,7 +35,15 @@ afterEach(() => editor?.remove());
 
 describe("the card's editor", () => {
     it("keeps only what differs from the defaults, and what the form doesn't show", async () => {
-        const value = { ...SET, name: "", show_image: true, show_cancel: false, image_variant: "default", row_step: "full" };
+        const value = {
+            ...SET,
+            name: "",
+            show_image: true,
+            show_cancel: false,
+            image_variant: "default",
+            row_step: "full",
+            scroll_indicator: "both",
+        };
         expect(await save(SET, value)).toEqual({
             type: "custom:mower-status-card",
             entity: "lawn_mower.matti",
@@ -48,12 +56,15 @@ describe("the card's editor", () => {
     });
 
     it("drops what was set for one mower when another is chosen", async () => {
-        expect(await save(SET, { ...SET, entity: "lawn_mower.rosie", show_image: false, row_step: "half" })).toEqual({
+        expect(
+            await save(SET, { ...SET, entity: "lawn_mower.rosie", show_image: false, row_step: "half", scroll_indicator: "fade" }),
+        ).toEqual({
             type: "custom:mower-status-card",
             entity: "lawn_mower.rosie",
             max_height: 400,
             show_image: false,
             row_step: "half",
+            scroll_indicator: "fade",
         });
     });
 

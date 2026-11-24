@@ -11,6 +11,7 @@ import { customElement, property, state } from "lit/decorators.js";
 
 import {
     CARD_VERSION,
+    DEFAULT_SCROLL_INDICATOR,
     FEATURE_DOCK,
     FEATURE_PAUSE,
     FEATURE_START_MOWING,
@@ -20,7 +21,7 @@ import {
     TICK_MS,
 } from "./const";
 import "./editor";
-import { ScrollFade, fadeStyles } from "./fade";
+import { ScrollFade, fadeStyles, scrollIndicator, validScrollIndicator } from "./fade";
 import { besideFits, besideNoTaller, buttonsFit } from "./fit";
 import type { HassEntity, HomeAssistant } from "./hass";
 import { gridMinRows, heightCardSize, heightStyle, validHeight } from "./height";
@@ -195,7 +196,11 @@ export class MowerStatusCard extends LitElement {
     constructor() {
         super();
         // Fades the notices' edges while the card is held to a height, through the card's own lifecycle.
-        new ScrollFade(this, () => (this.heightStyle() ? this.renderRoot.querySelectorAll<HTMLElement>(".notices") : []));
+        new ScrollFade(
+            this,
+            () => (this.heightStyle() ? this.renderRoot.querySelectorAll<HTMLElement>(".notices") : []),
+            () => scrollIndicator(this.config ?? {}, DEFAULT_SCROLL_INDICATOR),
+        );
     }
 
     public static getConfigElement(): HTMLElement {
@@ -217,6 +222,9 @@ export class MowerStatusCard extends LitElement {
         }
         if (!validRowStep(config)) {
             throw new Error(translate(browserLanguage(), "common.invalid_row_step"));
+        }
+        if (!validScrollIndicator(config)) {
+            throw new Error(translate(browserLanguage(), "common.invalid_scroll_indicator"));
         }
         this.config = { ...config };
     }

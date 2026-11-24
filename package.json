@@ -1,6 +1,6 @@
 {
     "name": "mower-status-card",
-    "version": "1.2.2",
+    "version": "1.3.0",
     "description": "Home Assistant dashboard card for a robotic lawn mower, with its state, battery, the task under way, its problems and its buttons",
     "keywords": [
         "home-assistant",

@@ -1,3 +1,4 @@
+import type { ScrollIndicatorConfig } from "./fade";
 import type { LovelaceCardConfig } from "./hass";
 import type { RowStepConfig } from "./rows";
 
@@ -28,7 +29,7 @@ export type Slot = (typeof SLOTS)[number];
 /** Written in place of an entity to turn a slot off, so what was found isn't used. */
 export const NONE = "none";
 
-export interface MowerStatusCardConfig extends LovelaceCardConfig, RowStepConfig {
+export interface MowerStatusCardConfig extends LovelaceCardConfig, RowStepConfig, ScrollIndicatorConfig {
     /** The lawn_mower entity. */
     entity: string;
     /** Replaces the device's name. */

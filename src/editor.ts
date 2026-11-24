@@ -1,12 +1,14 @@
 /**
  * The card's visual editor: the mower, its name and picture, the blade limit, how the card rounds its height to the rows
- * of a sections view (its height mode is set in YAML only), and the companion
- * entities the card found, each of which can be swapped or turned off. Only what differs from what was found is written.
+ * of a sections view (its height mode is set in YAML only), how the notices show that there are more when they scroll,
+ * and the companion entities the card found, each of which can be swapped or turned off. Only what differs from what was found is written.
  */
 import { LitElement, css, html, nothing } from "lit";
 import type { CSSResultGroup, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 
+import { DEFAULT_SCROLL_INDICATOR } from "./const";
+import { scrollIndicatorData, scrollIndicatorSchema, tidyScrollIndicator } from "./fade";
 import type { HomeAssistant } from "./hass";
 import { rowStepData, rowStepSchema, tidyRowStep } from "./rows";
 import { browserLanguage, translate } from "./localize/localize";
@@ -58,6 +60,7 @@ function mainSchema(config: MowerStatusCardConfig, mammotion: boolean, text: (ke
         { name: "show_cancel", selector: { boolean: {} } },
         { name: "blade_warning_hours", selector: { number: { min: 0, max: 5000, step: 1, mode: "box", unit_of_measurement: "h" } } },
         ...rowStepSchema(config, text),
+        ...scrollIndicatorSchema(text),
     ];
 }
 
@@ -76,7 +79,7 @@ export class MowerStatusCardEditor extends LitElement {
         if (!this.hass) {
             return nothing;
         }
-        const data = rowStepData({ ...DEFAULTS, ...this.config });
+        const data = scrollIndicatorData(rowStepData({ ...DEFAULTS, ...this.config }), DEFAULT_SCROLL_INDICATOR);
         const mammotion = !!this.config.entity && platformOf(this.hass, this.config.entity) === "mammotion";
         return html`
             <ha-form
@@ -131,7 +134,7 @@ export class MowerStatusCardEditor extends LitElement {
     }
 
     private mainChanged(event: CustomEvent<{ value: MowerStatusCardConfig }>): void {
-        const config: MowerStatusCardConfig = tidyRowStep(event.detail.value);
+        const config: MowerStatusCardConfig = tidyScrollIndicator(tidyRowStep(event.detail.value), DEFAULT_SCROLL_INDICATOR);
         // Another mower has entities, a model, a picture, a name and blades of its own, so what was set for the last one goes.
         if (config.entity !== this.config.entity) {
             delete config.entities;
