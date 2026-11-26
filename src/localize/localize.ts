@@ -21,9 +21,25 @@ export function translate(language: string | undefined, key: string): string {
     return translateOwn(language, key) ?? read(LANGUAGES.en, key) ?? key;
 }
 
-/** A text in the viewer's language only, without falling back to English, or undefined when that language has none. */
+/**
+ * A text in the viewer's language only, without falling back to English, or undefined when that language has none.
+ * `pt-BR` reads `pt-br.json` first, then `pt.json`.
+ */
 export function translateOwn(language: string | undefined, key: string): string | undefined {
-    return read(LANGUAGES[(language ?? "en").split(/[-_]/)[0].toLowerCase()], key);
+    for (const code of languageCodes(language)) {
+        const text = read(LANGUAGES[code], key);
+        if (text !== undefined) {
+            return text;
+        }
+    }
+    return undefined;
+}
+
+/** The codes to try for a language tag, the most specific first: `pt-br`, then `pt`. */
+function languageCodes(language: string | undefined): string[] {
+    const tag = (language ?? "en").trim().toLowerCase().replace(/_/g, "-");
+    const base = tag.split("-")[0];
+    return tag === base ? [base] : [tag, base];
 }
 
 function read(table: Record<string, unknown> | undefined, key: string): string | undefined {

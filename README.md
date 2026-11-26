@@ -240,12 +240,13 @@ who can test it with their own mower.
 
 The card's texts are in `src/localize/languages/`, one JSON file per language, named by its language code, such as
 `en.json` and `fi.json`. To add a language, copy `en.json` to the new language's code, such as `sv.json`, and translate
-the values. Nothing else needs changing. The card finds the file by itself and uses it when Home Assistant is set to
-that language. A text left out falls back to English, apart from those under `state`, which fall back to Home
-Assistant's word. The mower's states come in the integration's own words where they say more than Home Assistant's
-standard states, such as Sunseeker's, otherwise in the card's or Home Assistant's, and the errors in the integration's.
-The texts under `state` give the card words of its own for idle, returning and error, as Home Assistant hasn't
-translated those into every language. Leave out any for which Home Assistant's word will do.
+the values. A file may name a region, such as `pt-br.json`. It is used for `pt-BR`, falling back to a file for the
+language alone (`pt.json`), and then to English. Nothing else needs changing. The card finds the file by itself and uses
+it when Home Assistant is set to that language. A text left out falls back to English, apart from those under `state`,
+which fall back to Home Assistant's word. The mower's states come in the integration's own words where they say more
+than Home Assistant's standard states, such as Sunseeker's, otherwise in the card's or Home Assistant's, and the errors
+in the integration's. The texts under `state` give the card words of its own for idle, returning and error, as Home
+Assistant hasn't translated those into every language. Leave out any for which Home Assistant's word will do.
 
 ## Development
 

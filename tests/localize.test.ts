@@ -40,6 +40,8 @@ describe("languages", () => {
 
     it("give a language's own text only, with no fallback", () => {
         expect(translateOwn("fi-FI", "common.name")).toBe("Ruohonleikkurin tila");
+        expect(translateOwn("fi_FI", "common.name")).toBe("Ruohonleikkurin tila");
+        expect(translateOwn("xx-YY", "common.name")).toBeUndefined();
         expect(translateOwn("xx", "common.name")).toBeUndefined();
     });
 });

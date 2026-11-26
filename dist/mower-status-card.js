@@ -1104,7 +1104,18 @@ function translate(language, key) {
   return translateOwn(language, key) ?? read(LANGUAGES.en, key) ?? key;
 }
 function translateOwn(language, key) {
-  return read(LANGUAGES[(language ?? "en").split(/[-_]/)[0].toLowerCase()], key);
+  for (const code of languageCodes(language)) {
+    const text = read(LANGUAGES[code], key);
+    if (text !== void 0) {
+      return text;
+    }
+  }
+  return void 0;
+}
+function languageCodes(language) {
+  const tag = (language ?? "en").trim().toLowerCase().replace(/_/g, "-");
+  const base = tag.split("-")[0];
+  return tag === base ? [base] : [tag, base];
 }
 function read(table, key) {
   let value = table;
